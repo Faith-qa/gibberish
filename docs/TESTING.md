@@ -1103,3 +1103,23 @@ This document defines the testing and quality assurance strategy for Gibberish M
 `IMPLEMENTATION_PLAN.md` defines implementation milestones and their required verification.
 
 Changes to critical security or synchronization behavior must include corresponding test updates.
+## M2 approved verification gates
+
+Keep all M1 v1 known-answer and codec regression vectors. Add v2 exact canonical
+AAD/metadata mutations for every immutable field, malformed dates/nulls/parent
+ordering/duplicates/cap, cross-version failure without downgrade, and v1/v2 binary
+codec round trips. Operational repositories must reject legacy v1 records.
+
+Add fake-indexeddb integration tests for ciphertext-only stores, strict DTOs
+(including rejecting CryptoKey objects), all transaction-step rollbacks, immutable
+IDs and idempotency, exact snapshot races, concurrent sibling preservation,
+missing/corrupt/cyclic history, authenticated projection rebuild, outbox mode
+changes, uncertain receipts and bounded retry failures. Assert no Web Crypto
+operation runs inside a Dexie transaction. Test unsupported database versions,
+upgrade failure and closed/unavailable database without automatic deletion.
+
+Use real Playwright IndexedDB cases for reload, multi-tab writes, offline domain
+operation, and persistent-profile browser restart. A fake database cannot prove
+on-disk browser persistence. Do not implement onboarding or journal UI just to
+exercise these APIs. Save raw verification output locally under reports/M2/logs;
+no M2 completion report until required checks and acceptance criteria pass.

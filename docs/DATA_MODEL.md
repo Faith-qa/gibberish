@@ -1,6 +1,6 @@
 # Gibberish — Data Model Specification
 
-**Version:** 1.2
+**Version:** 2.0
 **Product:** Gibberish  
 **Architecture:** Local-first, client-side encrypted PWA  
 **Status:** Technical specification — pending implementation validation
@@ -120,7 +120,7 @@ Implementation may organize these types into separate files while preserving the
 
 ```typescript
 export interface EncryptedEnvelope {
-  version: 1;
+  version: 1 | 2; // v1 legacy recovery; v2 required for operational revisions
   algorithm: "AES-256-GCM";
   nonce: string;
   ciphertext: string;
@@ -187,7 +187,7 @@ export interface EncryptedJournalRevision {
 
   status: EntryStatus;
 
-  encryptedPayload: EncryptedEnvelope;
+  encryptedPayload: EncryptedEnvelope & { version: 2 };
 }
 ```
 
@@ -306,26 +306,35 @@ Keeping both versions as separate entries requires explicit entry identifiers an
 
 The application must authenticate the relationship between encrypted content and its record identity.
 
-AES-GCM authenticated additional data (AAD) must use a canonical, versioned encoding of:
+Operational revisions use envelope/AAD version 2. AAD is UTF-8 without BOM of
+this exact compact JSON tuple:
 
-- Encryption envelope version
-- Journal identifier
-- Entry identifier
-- Revision identifier
-- Record schema version
+```text
+["gibberish-revision-aad",2,2,"AES-256-GCM",schemaVersion,journalId,entryId,revisionId,parentRevisionIds,status,createdAt,updatedAt,deletedAt]
+```
 
-Requirements:
+Authenticate every listed immutable field. The first 2 identifies the AAD format,
+the second the encrypted-envelope format. Record schemaVersion remains 1. UUIDv4
+IDs must be canonical lowercase. Parent IDs are a strictly ascending ASCII set,
+unique, non-self-referential and limited to 256; never truncate. Writers sort
+before sealing; validators reject noncanonical input. Dates must round-trip as
+`YYYY-MM-DDTHH:mm:ss.sssZ`. Active deletedAt is explicit null; trashed deletedAt
+matches updatedAt. updatedAt must not precede createdAt; roots must be active
+with equal createdAt and updatedAt. Reject unsupported fields, formats and implicit defaults.
+Freeze metadata including parent arrays before async work. Changing metadata
+requires a new revision ID and fresh encryption, never an in-place patch.
 
-- AAD encoding must be deterministic.
-- Encryption and decryption must reconstruct identical AAD bytes.
-- Changing an authenticated identity field must invalidate decryption.
-- Mutable synchronization metadata must not be included in immutable revision AAD.
-- The cryptography module must own AAD construction.
-- AAD format changes require explicit versioning and compatibility tests.
+Mutable projections, verification flags, transport acknowledgments and local
+configuration are not part of immutable revision AAD. They are not proof of
+authenticity. Graph/parent relationships require validation after tag verification.
+AAD makes metadata authentic, not secret: only minimal non-content metadata is
+clear for indexing and transport, and none is exposed through locked domain reads.
 
-The canonical M1 AAD bytes, key-wrapping profiles and encrypted-envelope binary
-serialization are defined in [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md). Envelope format
-version 1 is unchanged; no persisted journals exist in M1 to migrate.
+M1 v1 identity-only AAD and vectors remain unchanged. V1 is legacy payload
+recovery only, never accepted into operational history or silently migrated.
+V2 authentication failures must not fall back to v1. Key wrapping stays v1;
+codec word mapping stays v1. See [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md) and
+[LOCAL_STORAGE.md](LOCAL_STORAGE.md) for byte and persistence contracts.
 
 ### 7.1 Revision-Bound Encryption
 
@@ -426,7 +435,7 @@ export interface JournalConfig {
   autoLockMinutes: 5;
 
   codecVersion: 1;
-  encryptionVersion: 1;
+  encryptionVersion: 2;
 }
 ```
 
@@ -482,46 +491,26 @@ The MVP uses one IndexedDB database.
 | `sync_conflicts` | `conflictId` | Preserved conflict information |
 | `journal_tombstones` | `entryId` | Permanent deletion markers |
 
-### 11.2 Recommended Indexes
+### 11.2 Initial Dexie Schema (database version 1)
 
-`journal_entries`:
-
-- `journalId`
-- `status`
-- `createdAt`
-- `updatedAt`
-- `deletedAt`
-
-`journal_revisions`:
-
-- `journalId`
-- `entryId`
-- `revisionId`
-- `updatedAt`
-
-`sync_queue`:
-
-- `journalId`
-- `state`
-- `createdAt`
-
-`sync_conflicts`:
-
-- `journalId`
-- `entryId`
-- `resolved`
-
-`journal_tombstones`:
-
-- `journalId`
-- `permanentlyDeletedAt`
+The database schema version is independent of envelope/AAD version 2. Its exact
+nine-store index definitions and transaction contracts are documented in
+[LOCAL_STORAGE.md](LOCAL_STORAGE.md). Use compound journal-scoped indexes and a
+unique `[journalId+encryptedPayload.nonce]` index as a collision-detection guard.
+Explicit `journalId` indexes on revisions/projections ensure full journal reads
+do not depend on an optional/null trailing compound key. This corrects the
+design-review index sketch without changing any stored record format.
+Do not index plaintext, ciphertext, key blobs or boolean `resolved`. Null dates
+are not indexable; query active/trashed entries by status. The MVP database holds
+one journal; every repository request still validates journal ownership.
 
 ### 11.3 Atomic Transaction Requirements
 
 The following operations must be atomic within IndexedDB:
 
 - Creating a revision and updating its current-entry projection
-- Creating a revision and recording its pending synchronization operation
+- Creating a revision and recording its eligible pending synchronization operation
+  (local-only writes have no cloud-pending row)
 - Moving an entry to Trash and recording the new revision
 - Restoring an entry and recording the new revision
 - Creating a permanent deletion tombstone and removing local encrypted content
@@ -638,7 +627,7 @@ Requirements:
 
 - Conflict records must reference immutable encrypted revisions.
 - All conflicting branches must remain available until resolution.
-- Conflict detection must not require plaintext decryption.
+- Keyless conflict detection is provisional structural comparison only. Authoritative projection/conflict promotion requires authenticated metadata through the unlocked crypto/domain layer; sync itself never decrypts.
 - The application must not silently choose a winner.
 - Resolution must create a new revision.
 - Conflict records must not contain plaintext titles or bodies.

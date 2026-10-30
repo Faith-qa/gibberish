@@ -10,7 +10,7 @@ When you want to revisit your original thoughts, unlock your journal and explici
 
 Your journal belongs to you.
 
-> **Project status:** M0 application foundation and M1 cryptography/codec modules implemented. The responsive shell still accepts and stores no journal content. The M1 helpers are tested independently; user-facing journaling, unlocking, persistence, and all other journal workflows described below remain planned.
+> **Project status:** M0 foundation, M1 cryptography/codec, and M2 encrypted storage/domain modules are implemented. M2 verification has passed; its completion report remains local. The responsive shell still accepts and stores no journal content; onboarding, journal UI and automatic locking begin in M3. Domain APIs are exercised by automated tests without connecting them to the UI.
 
 ---
 
@@ -232,7 +232,7 @@ Playwright tests the production build; run `pnpm build` first. It starts and sto
 
 ## Environment Configuration
 
-M0 requires no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
+M0 through M2 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
 
 Optional Google integration will require Google Cloud project configuration and OAuth client settings.
 
@@ -314,9 +314,9 @@ Run all five checks, including a fresh build before browser tests:
 pnpm check
 ```
 
-M0 was verified locally with Node 26.13.0 and pnpm 12.16.1. Node 24 is the CI target; the hosted GitHub Actions run is pending a push. TypeScript is pinned to 6.0.3 for compatibility with the ESLint parser.
+M0 was verified locally with Node 26.13.0 and pnpm 12.16.1. Node 24 is the CI target; hosted CI status is not inferred from local verification. TypeScript is pinned to 6.0.3 for compatibility with the ESLint parser.
 
-M0 adds two React component tests and two browser scenarios across five projects (10 browser tests). Browser checks cover layout overflow, runtime errors, external requests, and keyboard skip navigation. Unit/integration suites are discovered under `tests/unit` and `tests/integration`; integration tests begin when domain modules exist.
+M0 adds two React component tests and two browser scenarios across five projects (10 browser tests). Browser checks cover layout overflow, runtime errors, external requests, and keyboard skip navigation. Unit/integration suites are discovered under `tests/unit` and `tests/integration`; M2 integration tests exercise the encrypted storage/domain modules.
 
 M1 adds AES-GCM, key-wrapping, recovery, validation, privacy-boundary and codec
 tests, plus browser tests for the pure codec and actual bundled cryptographic
@@ -329,7 +329,7 @@ mobile emulation; real-device qualification remains future release work.
 The revision-bound AAD design requires fresh encryption for every new revision,
 including Trash and restore. See [the cryptographic format](docs/CRYPTOGRAPHY.md)
 and [codec format](docs/GIBBERISH_CODEC.md) for exact encodings, dependency review,
-limits and tests. No journal storage or UI workflow is implemented by these helpers.
+limits and tests. The crypto helpers remain independent of storage and UI.
 
 Milestone completion reports are local-only at `reports/M{number}/COMPLETION_REPORT.md`
 with supporting output in `logs/`. Incomplete work uses `STATUS_REPORT.md`.
@@ -337,8 +337,15 @@ The entire root `reports/` directory is ignored and must never be committed.
 
 CI runs frozen installation, typecheck, lint, unit tests, production build, browser tests, and `pnpm audit --audit-level=high`. Run the audit locally as well when reviewing dependency changes.
 
-Encryption/codec behavior is covered in M1; journal-domain integrity, persistence
-and offline workflows remain later work. No service worker or PWA manifest is
+M2 adds full immutable-metadata envelope/AAD v2, pinned Dexie/fake-indexeddb,
+atomic encrypted revision/projection/conflict/outbox transactions, authenticated
+history reads/rebuilds, and explicit uncertain-commit recovery. V1 vectors and
+read-only legacy payload recovery remain supported without a downgrade path.
+See [the local storage contract](docs/LOCAL_STORAGE.md) for APIs, schema,
+10,000-revision defensive limit and security limitations. Browser harnesses under
+ignored `reports/M2/browser/` cover reloads, independent tabs, offline domain
+operations and normal persistent-browser restarts. These do not prove power-loss
+durability or qualify real mobile devices. No storage harness ships in `dist/`. No service worker or PWA manifest is
 configured yet (M5). The baseline production CSP restricts scripts and connections
 to the same origin, adds `wasm-unsafe-eval` for Argon2id's WebAssembly (not general
 JavaScript `unsafe-eval`), and permits inline styles for Tailwind. HTTP security
@@ -355,7 +362,7 @@ Development is divided into ten milestones.
 |---|---|---|
 | M0 | Project Foundation | Complete |
 | M1 | Cryptography and Gibberish Codec | Complete; verified report kept locally |
-| M2 | Local Storage and Journal Domain | Not started |
+| M2 | Local Storage and Journal Domain | Complete; awaiting milestone review |
 | M3 | Onboarding, Unlocking, and Core UI | Not started |
 | M4 | Trash, Recovery, and Export | Not started |
 | M5 | PWA and Offline Hardening | Not started |
@@ -376,6 +383,8 @@ The project maintains specifications for its key architectural and product decis
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, encryption, and key management |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Application architecture and module responsibilities |
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Encrypted records, revision history, and persistence schemas |
+| [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) | Exact v2/legacy v1 cryptographic profiles |
+| [`docs/LOCAL_STORAGE.md`](docs/LOCAL_STORAGE.md) | M2 APIs, transactions, schema and failure recovery |
 | [`docs/SYNC_STRATEGY.md`](docs/SYNC_STRATEGY.md) | Offline synchronization, conflicts, and deletion propagation |
 | [`docs/TESTING.md`](docs/TESTING.md) | Testing strategy and quality gates |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Step-by-step implementation milestones |

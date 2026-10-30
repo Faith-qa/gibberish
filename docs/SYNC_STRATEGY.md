@@ -1,6 +1,6 @@
 # Gibberish — Synchronization Strategy
 
-**Version:** 1.1 (Draft)
+**Version:** 1.2 (Draft)
 **Product:** Gibberish  
 **Architecture:** Local-first, client-side encrypted PWA  
 **Cloud provider:** Optional Google Drive and Google Sheets  
@@ -162,7 +162,7 @@ A revision contains:
 - `journalId`
 - `entryId`
 - `revisionId`
-- `parentRevisionId`
+- `parentRevisionIds`
 - `schemaVersion`
 - `createdAt`
 - `updatedAt`
@@ -217,9 +217,9 @@ Requirements:
 
 A new revision must reference the revision on which it was based.
 
-For a newly created entry, `parentRevisionId` is `null`.
+For a newly created entry, `parentRevisionIds` is `[]`.
 
-For an edit, deletion, or restoration, `parentRevisionId` references the previous revision.
+For an edit, deletion, or restoration, `parentRevisionIds` contains the previous revision ID.
 
 The synchronization engine must validate revision ancestry before selecting an entry's current state.
 
@@ -242,7 +242,7 @@ It stores:
 
 ### 6.2 Atomic Local Writes
 
-The application must commit an encrypted revision and its pending synchronization operation within the same IndexedDB transaction.
+For cloud-enabled writes, the application must commit an encrypted revision and its eligible pending synchronization operation within the same IndexedDB transaction. Local-only writes create no cloud-pending row; earlier local history needs an explicit future connection/backfill policy, not a false cloud-success claim.
 
 If the transaction fails:
 
@@ -364,6 +364,20 @@ Synchronization should run when:
 
 The application must not rely on background synchronization being supported by every browser.
 
+### M2 Trust Boundary for Future Synchronization
+
+Full immutable revision metadata is authenticated by envelope/AAD v2. Locked
+sync may transfer opaque ciphertext, validate structure and stage provisional
+ancestry/conflict observations. It may not promote incoming records to accepted
+projections, suppress/resurrect entries, expire Trash or delete content using
+unverified metadata. Authentication/promotion is an unlocked crypto/domain task;
+the sync engine never receives the key or decrypts. Persisted verification flags
+and projection caches are not proof. Publication acknowledgment verifies exact
+remote bytes and is distinct from fully authenticated inbound reconciliation.
+No Google adapter, inbox/queue worker or tombstone deletion workflow is added in
+M2. Future remote data must be isolated until structurally and cryptographically
+acceptable; incomplete history is preserved, never replaced using timestamps.
+
 ### 8.4 Locked Journal Synchronization
 
 The synchronization engine may transfer already encrypted revisions while the journal is locked if valid cloud authorization remains available.
@@ -447,7 +461,7 @@ A resolution revision must identify all conflicting parent revisions it supersed
 
 This requires a small extension to the original single-parent data model.
 
-The implementation may use an explicit `parentRevisionIds` array for resolution revisions while retaining a single parent for ordinary edits.
+Use a canonical sorted `parentRevisionIds` array throughout: empty for roots, one element for ordinary edits, and multiple parents only for explicit future resolutions.
 
 ### 10.4 Conflict Safety
 
@@ -463,7 +477,7 @@ Moving an entry to Trash creates a new encrypted revision.
 
 The revision must:
 
-- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's identity-bound AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
+- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's full immutable-metadata v2 AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
 - Set status to `trashed`.
 - Record the deletion timestamp.
 - Reference the previous revision.
@@ -482,7 +496,7 @@ The revision must:
 - Set status to `active`.
 - Clear the deletion timestamp.
 - Reference the previous trashed revision.
-- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's identity-bound AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
+- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's full immutable-metadata v2 AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
 
 Creating this revision requires an unlocked journal key. Ciphertext from the
 source revision must not be copied unchanged under the new revision identifier.

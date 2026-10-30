@@ -1,7 +1,7 @@
 import { fromBase64url } from './encoding'
 import { JournalCryptoError } from './errors'
 import { ARGON2ID_PARAMETERS, MAX_PLAINTEXT_BYTES, RECOVERY_PARAMETERS } from './types'
-import type { EncryptedEnvelope, RevisionIdentity, WrappedKeyRecord } from './types'
+import type { EncryptedEnvelope, RevisionEnvelope, SupportedEnvelope, RevisionIdentity, WrappedKeyRecord } from './types'
 
 export function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -27,13 +27,29 @@ export function validateIdentity(value: unknown): RevisionIdentity {
   return Object.freeze({ journalId: input.journalId, entryId: input.entryId, revisionId: input.revisionId, schemaVersion: 1 })
 }
 
-export function validateEnvelope(value: unknown): EncryptedEnvelope {
+function envelopeFields(value: unknown, version: 1 | 2): SupportedEnvelope {
   const input = record(value, ['version', 'algorithm', 'nonce', 'ciphertext'])
-  if (input.version !== 1) throw new JournalCryptoError('UNSUPPORTED_VERSION')
+  if (input.version !== version) throw new JournalCryptoError('UNSUPPORTED_VERSION')
   if (input.algorithm !== 'AES-256-GCM') throw new JournalCryptoError('INVALID_INPUT')
   fromBase64url(input.nonce, 12, 12)
   fromBase64url(input.ciphertext, 16, MAX_PLAINTEXT_BYTES + 16)
-  return Object.freeze({ version: 1, algorithm: 'AES-256-GCM', nonce: input.nonce as string, ciphertext: input.ciphertext as string })
+  return Object.freeze({ version, algorithm: 'AES-256-GCM', nonce: input.nonce as string, ciphertext: input.ciphertext as string })
+}
+
+/** Legacy identity-only format; operational writes never use this validator. */
+export function validateEnvelope(value: unknown): EncryptedEnvelope {
+  return envelopeFields(value, 1) as EncryptedEnvelope
+}
+
+export function validateOperationalEnvelope(value: unknown): RevisionEnvelope {
+  return envelopeFields(value, 2) as RevisionEnvelope
+}
+
+export function validateSupportedEnvelope(value: unknown): SupportedEnvelope {
+  const input = record(value, ['version', 'algorithm', 'nonce', 'ciphertext'])
+  if (input.version === 1) return validateEnvelope(input)
+  if (input.version === 2) return validateOperationalEnvelope(input)
+  throw new JournalCryptoError('UNSUPPORTED_VERSION')
 }
 
 export function validateWrappedKey(value: unknown, purpose: WrappedKeyRecord['purpose']): WrappedKeyRecord {

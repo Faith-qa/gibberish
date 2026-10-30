@@ -14,6 +14,14 @@ export default async function globalSetup() {
       lib: { entry: 'tests/browser/m1.ts', formats: ['es'], fileName: 'm1-harness' },
     },
   })
+  await build({
+    configFile: false,
+    build: {
+      outDir: 'reports/M2/browser',
+      emptyOutDir: true,
+      lib: { entry: 'tests/browser/m2.ts', formats: ['es'], fileName: 'm2-harness' },
+    },
+  })
   if (process.platform !== 'darwin') return
 
   // Isolate Firefox app data from the real browser and macOS privacy restrictions.

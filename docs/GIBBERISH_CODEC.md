@@ -51,12 +51,13 @@ persist a redundant Gibberish copy. Render any representation as text.
 ## Envelope integration
 
 The exact encrypted-envelope byte format is defined in
-[CRYPTOGRAPHY.md](CRYPTOGRAPHY.md): version `0x01`, algorithm ID `0x01`, the
+[CRYPTOGRAPHY.md](CRYPTOGRAPHY.md): version `0x01` (legacy) or `0x02` (operational), algorithm ID `0x01`, the
 12-byte nonce, and ciphertext including its 16-byte authentication tag. The
 crypto module owns validated envelope serialization; the codec still accepts
 only `Uint8Array` and has no dependency on the crypto implementation. Neither
-module selects title excerpts or renders content. Decryption needs the original
-external revision identity; the bytes do not encode it. There is no journal UI
+module selects title excerpts or renders content. V2 decryption needs the complete authenticated immutable metadata and expected
+journal/entry scope; v1 legacy recovery needs its identity tuple. The envelope
+bytes encode neither metadata nor scope. There is no journal UI
 integration yet.
 
 ## Verification and limits

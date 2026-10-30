@@ -1,8 +1,9 @@
-# M1 cryptographic format and implementation
+# Cryptographic formats and implementation
 
-Status: implementation format for encrypted envelope v1, wrapping v1 and codec
-integration. This document fills in byte-level details required by
-`SECURITY.md` and `DATA_MODEL.md`; it does not introduce storage or a journal UI.
+Status: operational envelope/AAD v2, legacy envelope/AAD v1, wrapping v1 and
+codec integration. This document defines crypto contracts required by
+`SECURITY.md` and `DATA_MODEL.md`. M2 storage/domain integration is documented
+in `LOCAL_STORAGE.md`; no journal UI is implemented.
 
 ## Modules and trust boundary
 
@@ -24,7 +25,7 @@ Incorrect credentials and structurally valid tampering both produce
 `AUTHENTICATION_FAILED`. Malformed records are rejected before authenticated
 operations. No caller-supplied IV or arbitrary AAD is accepted by encryption.
 
-## Entry encryption and canonical AAD
+## Legacy v1 entry encryption and canonical AAD
 
 Generate a 256-bit AES-GCM JEK with browser `subtle.generateKey`. Encrypt bytes
 with a fresh 12-byte nonce and a 128-bit tag. The envelope is exactly:
@@ -50,18 +51,19 @@ currently 1. UUID strings require no locale-specific normalization or escaping.
 The order is fixed; JavaScript object property order has no effect. Both encrypt
 and decrypt reconstruct it internally. This authenticates identity and the
 encrypted bytes, not every visible revision field: timestamps, status and parent
-IDs are not in the specified AAD. Future domain/sync code must not assume those
-fields have received cryptographic authentication or use timestamps as winners.
+IDs are not in the specified AAD. Legacy payload recovery must not treat those
+fields as authenticated operational history. All new operational revisions use the full v2 contract below.
 
 The user-approved revision-bound design is recorded in `DATA_MODEL.md` §7.1 and
 `SYNC_STRATEGY.md` §11: every new revision, including Trash/restore, needs fresh
 encryption under its own revision ID. Authenticate and decrypt the source first,
 preserve its title/body values, and encrypt with a new nonce. Failure must not
-produce a partial revision. M1 tests exercise this cryptographic transition only;
-no journal lifecycle or database transaction has been implemented.
+produce a partial revision. M1 tests exercise this cryptographic transition
+only; M2 implements creation/edit transactions separately. Trash and restoration
+workflows are deferred to M4.
 
-The M2 domain will serialize the title and body together before encryption, and
-keep the encrypted envelope separate from transient readable UI state. These
+The M2 domain serializes the title and body together before encryption and
+keeps the encrypted envelope separate from transient readable UI state. These
 byte-oriented helpers do not render content, authorize sessions, or persist it.
 
 ## Nonces and randomness
@@ -74,11 +76,11 @@ No caller can reset the registry through the public API.
 
 This registry is not persistent or shared across tabs/devices. Across contexts
 the random-IV design relies on the browser CSPRNG and has a nonzero collision
-probability. Finite tests cannot prove lifetime uniqueness; M1 does not claim an
+probability. Finite tests cannot prove lifetime uniqueness; neither M1 nor M2 claims an
 absolute cross-device no-collision guarantee. The registry also grows with the
-number of operations during a live context. Multi-tab lifecycle and any durable
-key-use accounting belong to later local/domain work; the nonce length and AAD
-must not be weakened to simplify it.
+number of operations during a live context. M2 adds a journal-scoped unique nonce index as defense in depth and preserves
+the same sealed candidate on transaction retries. It is not a cross-device
+nonce registry; nonce length and AAD must not be weakened to simplify storage.
 
 ## JEK wrapping and key lifecycle
 
@@ -89,7 +91,7 @@ raw JEK. Unwrapping returns a `CryptoKey` supporting the same lifecycle. Derived
 wrapping keys are non-extractable with wrapKey/unwrapKey usages only.
 
 Public return values are wrapped records matching `DATA_MODEL.md` §8.1. Callers
-provide the expected journal ID separately (from a future key bundle). AES-GCM
+provide the expected journal ID separately (from the validated journal key bundle). AES-GCM
 wrapping uses a fresh nonce, 128-bit tag, and this canonical UTF-8 JSON AAD:
 
 ```text
@@ -142,7 +144,7 @@ can rewrap the same JEK under a new passphrase without re-encrypting entries.
 
 | Offset | Bytes | Meaning |
 |---|---|---|
-| 0 | 1 | Envelope version `0x01` |
+| 0 | 1 | Envelope version `0x01` (legacy) or `0x02` (operational) |
 | 1 | 1 | Algorithm identifier `0x01` = AES-256-GCM |
 | 2 | 12 | Decoded nonce |
 | 14 | remainder, at least 16 | Ciphertext followed by 16-byte tag |
@@ -151,8 +153,8 @@ Minimum size is 30 bytes, maximum 16 MiB + 30. `envelopeFromBytes` rejects
 unsupported versions/algorithms and invalid lengths and reconstructs the exact
 envelope. The independent codec maps this entire byte sequence using
 [GIBBERISH_CODEC.md](GIBBERISH_CODEC.md). Keys, plaintext, UI state and revision
-identifiers are not encoded; decryption still needs the correct external
-revision identity. Valid-looking codec output alone never establishes integrity.
+identifiers are not encoded; v2 decryption still needs the full immutable metadata tuple and independently
+expected journal/entry scope; v1 recovery needs the original identity tuple. Valid-looking codec output alone never establishes integrity.
 
 ## Dependency review and CSP
 
@@ -198,5 +200,45 @@ No tests prove invulnerability or complete memory erasure. Caller plaintext and
 key references remain the caller's responsibility; JS strings, browser internals,
 WebAssembly memory and garbage collection cannot be guaranteed erased by this
 module. Compromised origins/devices/extensions remain outside its protection.
-Session locking, actual journal storage, lifecycle transactions and real-device
-release qualification are not implemented or certified by M1.
+M2 adds revocable domain capabilities, storage and lifecycle transactions; M1
+alone did not implement them. UI locking/inactivity/background handling is M3,
+and real-device release qualification remains future work.
+
+## M2 operational envelope/AAD v2
+
+The approved v2 AAD is the UTF-8 encoding without BOM/whitespace of this tuple:
+
+```text
+["gibberish-revision-aad",2,2,"AES-256-GCM",schemaVersion,journalId,entryId,revisionId,parentRevisionIds,status,createdAt,updatedAt,deletedAt]
+```
+
+DATA_MODEL §7 defines canonical lowercase UUIDv4 IDs, exact UTC millisecond
+ISO timestamps, sorted unique non-self parent IDs (maximum 256), explicit
+null for active deletedAt, trashed deletedAt equal to updatedAt, updatedAt not
+before createdAt, and active roots with createdAt equal to updatedAt. Reject
+noncanonical inputs before cryptographic work rather than normalizing them.
+These constraints fix the only supported profile; future profiles need explicit
+versioning. Envelope version and algorithm are validated constants as well as
+AAD members. Changing an immutable field requires a new revision and nonce.
+
+V1 bytes, wrapping, KDF parameters and vectors do not change. New `encryptRevision` and
+`decryptRevision` APIs require complete frozen metadata and expected scope;
+operational storage refuses v1. V1 helpers remain for regression/explicit legacy
+payload recovery only, never automatic promotion or migration. There is no
+cross-version retry after authentication failure.
+
+The binary envelope keeps the same layout but uses version byte 0x02 for v2
+(algorithm byte 0x01); serializers dispatch exactly by version. Gibberish `gib1:`
+is independent of crypto version and unchanged. Record schemaVersion and database
+version remain 1. New journal configuration declares encryptionVersion 2.
+
+Canonical UUIDs, timestamps, explicit deletedAt null, parent ordering/uniqueness
+and cap 256 are validated before crypto. Context/parent arrays are copied and
+frozen before awaiting. AES-GCM verifies both content and metadata; it does not
+prove timestamp truth, complete history, per-device authorship or prevent whole
+valid-history rollback. Structural DAG validation follows authentication.
+
+Sync can transfer bytes while locked, but promotion is deferred until the unlocked
+crypto/domain layer authenticates them. Verification can transiently decrypt and
+clear buffers without displaying content. See LOCAL_STORAGE.md for two-phase
+preparation/commit; crypto never runs inside database transactions.

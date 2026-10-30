@@ -44,7 +44,7 @@ describe('untrusted cryptographic inputs', () => {
 
   it('rejects malformed, truncated and unknown binary envelopes', () => {
     expect(() => envelopeFromBytes(new Uint8Array(29))).toThrow()
-    expect(() => envelopeFromBytes(new Uint8Array(30).fill(2))).toThrow('Unsupported cryptographic format version.')
+    expect(() => envelopeFromBytes(new Uint8Array(30).fill(3))).toThrow('Unsupported cryptographic format version.')
     const bytes = new Uint8Array(30); bytes[0] = 1; bytes[1] = 2
     expect(() => envelopeFromBytes(bytes)).toThrow('Invalid cryptographic input.')
   })

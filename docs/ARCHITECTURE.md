@@ -212,35 +212,28 @@ Codex may introduce additional files or folders when necessary, but must preserv
 
 Responsible for all cryptographic operations.
 
-Suggested interface:
+Operational functions require the complete immutable v2 metadata contract:
 
 ```typescript
-interface CryptoService {
-  createJournalKeys(): Promise<JournalKeyBundle>;
+encryptRevision(
+  plaintext: Uint8Array,
+  key: CryptoKey,
+  metadata: RevisionMetadata
+): Promise<EncryptedJournalRevision>;
 
-  encrypt(
-    plaintext: Uint8Array,
-    key: CryptoKey
-  ): Promise<EncryptedEnvelope>;
-
-  decrypt(
-    envelope: EncryptedEnvelope,
-    key: CryptoKey
-  ): Promise<Uint8Array>;
-
-  wrapJournalKey(
-    key: CryptoKey,
-    credentials: WrappingCredentials
-  ): Promise<WrappedKeyRecord>;
-
-  unwrapJournalKey(
-    record: WrappedKeyRecord,
-    credentials: WrappingCredentials
-  ): Promise<CryptoKey>;
-}
+decryptRevision(
+  revision: unknown,
+  key: CryptoKey,
+  scope: { journalId: string; entryId: string }
+): Promise<Uint8Array>;
 ```
 
-The exact types and cryptographic details must be finalized in `SECURITY.md` and `DATA_MODEL.md`.
+`generateJournalKey`, passphrase/recovery wrapping and unwrapping, strict
+validators, and binary envelope serialization remain separate functions. The
+legacy `decryptLegacyEnvelope` API explicitly recovers v1 payload bytes only;
+no v1 metadata is promoted into operational history. Existing v1 encryption
+helpers remain for regression fixtures/compatibility, not domain writes.
+See `CRYPTOGRAPHY.md` and `DATA_MODEL.md` for the exact formats.
 
 The module must not depend on React, Dexie, or Google APIs.
 
@@ -273,52 +266,42 @@ The codec must operate on encrypted bytes, not original English text.
 
 Responsible for journal business logic.
 
-Suggested operations:
+M2 implements `initializeJournal`, `unlockJournal`, `prepareCreate`,
+`prepareEdit`, `commitWrite`, `createEntry`, `editEntry`, `readEntry`,
+`listEntries`, `rebuildProjections`, and `inspectCommit`. Entry operations require
+an opaque in-memory `JournalSession` capability, minted only after successful
+initialization/unwrap and revocable with `close()`.
 
-```typescript
-interface JournalService {
-  createEntry(input: CreateEntryInput): Promise<JournalEntry>;
+The service authenticates full relevant history, validates the DAG, serializes
+and encrypts content before persistence. `PreparedWrite` contains encrypted
+records and non-secret metadata only. The service receives transient English
+but the storage adapter does not. Domain reads never return a keyless
+authoritative timeline or select a conflicted branch by timestamp. Readable
+payloads returned by `readEntry` belong only in transient caller memory and must
+be cleared by future UI reveal/lock handling.
 
-  updateEntry(
-    id: string,
-    input: UpdateEntryInput
-  ): Promise<JournalEntry>;
-
-  deleteEntry(id: string): Promise<void>;
-
-  restoreEntry(id: string): Promise<void>;
-
-  listEntries(): Promise<JournalEntrySummary[]>;
-
-  getEntry(id: string): Promise<JournalEntry>;
-}
-```
-
-The service must ensure that content is encrypted before persistence.
-
-It must not directly call Google Drive APIs.
+See [LOCAL_STORAGE.md](LOCAL_STORAGE.md) for signatures, transactions and error
+semantics. Delete/restore, conflict resolution, UI session management and Google
+APIs are later milestones and are not part of the M2 service.
 
 ### 6.4 `core/storage`
 
 Responsible for local encrypted persistence.
 
-Suggested interface:
+Use encrypted-only repository contracts defined in `LOCAL_STORAGE.md`: atomic
+initialization, journal-scoped encrypted snapshots, immutable append with exact
+snapshot preconditions, projection rebuild, and uncertain-commit reconciliation.
+Do not expose arbitrary revision put/remove operations. The repository receives
+no plaintext, passphrase, recovery credential or CryptoKey. The domain validates
+and authenticates source snapshots and prepares sealed v2 revisions before a
+short database transaction commits revision/projection/conflict/outbox changes.
 
-```typescript
-interface JournalRepository {
-  save(entry: EncryptedJournalRecord): Promise<void>;
-
-  get(id: string): Promise<EncryptedJournalRecord | undefined>;
-
-  list(): Promise<EncryptedJournalRecord[]>;
-
-  remove(id: string): Promise<void>;
-}
-```
-
-The implementation must use IndexedDB through Dexie.
-
-It must store encrypted records and non-secret metadata only.
+Pure graph reducers remain framework/database independent. Dexie read/write
+transactions and exact snapshot checks are the multi-tab correctness mechanism;
+Web Locks are not required. Persisted projections/verification flags are hints,
+not authenticated history. Domain listings require a usable key/capability and
+verify metadata before returning any timeline information. No M3 UI/session
+manager or later cloud/deletion implementation is implied by these contracts.
 
 ### 6.5 `core/google`
 

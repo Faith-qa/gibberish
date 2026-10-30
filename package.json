@@ -20,6 +20,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e"
   },
   "dependencies": {
+    "dexie": "4.4.7",
     "libsodium-wrappers-sumo": "0.8.4",
     "react": "19.3.1",
     "react-dom": "19.3.1"
@@ -38,6 +39,7 @@
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.7",
+    "fake-indexeddb": "6.2.6",
     "globals": "17.13.0",
     "jsdom": "30.1.3",
     "tailwindcss": "4.3.3",

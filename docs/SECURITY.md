@@ -1,6 +1,6 @@
 # Gibberish — Security Specification
 
-**Version:** 1.0 (Draft)  
+**Version:** 1.1 (Draft)
 **Product:** Gibberish  
 **Platform:** Progressive Web App (PWA)  
 **Status:** Technical specification — pending implementation and security review  
@@ -148,6 +148,28 @@ in [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md). That document also records dependency-rev
 scope, nonce collision limits, memory-handling limitations and the narrow
 WebAssembly CSP allowance. Tests verify specific properties, not an overall
 security guarantee.
+
+### M2 Immutable Metadata Authentication
+
+Operational revisions use envelope/AAD v2 and bind journalId, entryId, revisionId,
+parentRevisionIds, status, createdAt, updatedAt, deletedAt, schemaVersion, envelope
+version and algorithm. Canonical serialization, strict validation and the
+256-parent cap are specified in DATA_MODEL §7. No fallback to identity-only v1
+is permitted after a v2 failure; legacy v1 payload recovery never authorizes old
+unauthenticated ancestry/status/dates as operational history.
+
+Ciphertext-only synchronization can transfer and structurally stage records
+without a key. It cannot authoritatively promote incoming metadata, apply
+retention or delete content while locked. Verification occurs through the
+unlocked crypto/domain layer; no persisted verified flag or secret verification
+key is trusted while locked. Authenticated metadata remains visible to raw
+storage observers; locked UI/domain reads reveal none of it.
+
+No plaintext, credentials, raw keys or CryptoKey objects may cross the storage
+DTO boundary. Encrypt and authenticate outside IndexedDB transactions; perform
+revision/projection/conflict/outbox writes atomically with exact snapshot checks.
+Separate authenticated tombstone design remains a gate before destructive M4/M7
+work; M2 does not implement deletion based on untrusted markers.
 
 ### 4.4 Encryption Format Versioning
 

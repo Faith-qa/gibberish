@@ -13,6 +13,24 @@ export interface RevisionIdentity {
   readonly schemaVersion: 1
 }
 
+export interface RevisionEnvelope extends Omit<EncryptedEnvelope, 'version'> {
+  readonly version: 2
+}
+
+export type SupportedEnvelope = EncryptedEnvelope | RevisionEnvelope
+
+export interface RevisionMetadata extends RevisionIdentity {
+  readonly parentRevisionIds: readonly string[]
+  readonly status: 'active' | 'trashed'
+  readonly createdAt: string
+  readonly updatedAt: string
+  readonly deletedAt: string | null
+}
+
+export interface EncryptedJournalRevision extends RevisionMetadata {
+  readonly encryptedPayload: RevisionEnvelope
+}
+
 export interface WrappedKeyRecord {
   readonly version: 1
   readonly purpose: 'passphrase' | 'recovery'
