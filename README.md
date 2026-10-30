@@ -10,7 +10,7 @@ When you want to revisit your original thoughts, unlock your journal and explici
 
 Your journal belongs to you.
 
-> **Project status:** Pre-implementation. The product and engineering specifications are documented, and development is organized into milestones. Features described below are planned unless explicitly identified as implemented.
+> **Project status:** M0 application foundation implemented. The responsive shell and development tooling are available. All journaling features described below remain planned; this version accepts and stores no journal content.
 
 ---
 
@@ -177,8 +177,8 @@ No custom backend is required for the MVP.
 
 For development, you will need:
 
-- Node.js — a current supported LTS release
-- pnpm — a version compatible with the project's configuration
+- Node.js 24 or newer (Node 24 is selected by `.nvmrc` and CI)
+- pnpm 12.16.1, pinned in `package.json`
 - Git
 - A modern browser
 - An editor such as IntelliJ IDEA or VS Code
@@ -195,7 +195,7 @@ Replace `<repository-url>` with the actual repository URL.
 ### Install Dependencies
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ### Start the Development Server
@@ -218,11 +218,21 @@ pnpm build
 pnpm preview
 ```
 
-**Note:** These commands describe the intended development workflow. The application scaffold and scripts will be established and verified during Milestone M0.
+The production build is written to `dist/` for static hosting. Use HTTPS in production. `pnpm preview` is a local verification server, not a production server.
+
+Install the browser engines before running end-to-end tests:
+
+```bash
+pnpm exec playwright install chromium firefox webkit
+# On Linux, install browser system dependencies too:
+pnpm exec playwright install --with-deps chromium firefox webkit
+```
+
+Playwright tests the production build; run `pnpm build` first. It starts and stops its own preview server on `127.0.0.1:4173`, which must be free. The suite covers desktop Chromium, Firefox, WebKit and emulated Android/iPhone viewports. Emulation does not replace real-device validation. On macOS the test setup creates and cleans up isolated Firefox app-data directories to avoid touching an installed Firefox profile and to work around [the upstream macOS profile issue](https://github.com/microsoft/playwright/issues/42768).
 
 ## Environment Configuration
 
-The local-only journal should not require Google credentials.
+M0 requires no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
 
 Optional Google integration will require Google Cloud project configuration and OAuth client settings.
 
@@ -239,7 +249,7 @@ Google Cloud setup instructions will be added when the integration is implemente
 
 ## Project Structure
 
-The planned application structure is:
+The established application structure is (reserved modules are empty until their milestone):
 
 ```text
 gibberish/
@@ -279,7 +289,7 @@ This structure may evolve as implementation progresses, provided the documented 
 
 ## Running Tests
 
-The project will use the following commands once M0 is complete:
+Run the following checks:
 
 ```bash
 # TypeScript validation
@@ -298,13 +308,19 @@ pnpm test:e2e
 pnpm build
 ```
 
-A combined verification command is also planned:
+Run all five checks, including a fresh build before browser tests:
 
 ```bash
 pnpm check
 ```
 
-Tests must cover normal behavior, failure scenarios, security boundaries, offline functionality, and data integrity.
+M0 was verified locally with Node 26.13.0 and pnpm 12.16.1. Node 24 is the CI target; the hosted GitHub Actions run is pending a push. TypeScript is pinned to 6.0.3 for compatibility with the ESLint parser.
+
+M0 adds two React component tests and two browser scenarios across five projects (10 browser tests). Browser checks cover layout overflow, runtime errors, external requests, and keyboard skip navigation. Unit/integration suites are discovered under `tests/unit` and `tests/integration`; integration tests begin when domain modules exist.
+
+CI runs frozen installation, typecheck, lint, unit tests, production build, browser tests, and `pnpm audit --audit-level=high`. Run the audit locally as well when reviewing dependency changes.
+
+Tests for encryption, data integrity, persistence, and offline operation belong to later milestones. No service worker or PWA manifest is configured in M0 (M5). The shell includes a baseline CSP; production HTTP security headers and CSP hardening remain release work. The HTML policy is applied to production builds only; Vite development removes it to support React Fast Refresh. Production permits inline styles for Tailwind and restricts scripts and connections to the same origin.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the complete testing strategy.
 
@@ -314,7 +330,7 @@ Development is divided into ten milestones.
 
 | Milestone | Description | Status |
 |---|---|---|
-| M0 | Project Foundation | Not started |
+| M0 | Project Foundation | Complete |
 | M1 | Cryptography and Gibberish Codec | Not started |
 | M2 | Local Storage and Journal Domain | Not started |
 | M3 | Onboarding, Unlocking, and Core UI | Not started |
@@ -435,4 +451,4 @@ Until a license is added, do not assume that the source code is licensed for unr
 
 ---
 
-**Gibberish — Your thoughts. Your language. Your privacy.*
+**Gibberish — Your thoughts. Your language. Your privacy.**
