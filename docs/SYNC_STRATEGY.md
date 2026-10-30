@@ -1,6 +1,6 @@
 # Gibberish — Synchronization Strategy
 
-**Version:** 1.0 (Draft)  
+**Version:** 1.1 (Draft)
 **Product:** Gibberish  
 **Architecture:** Local-first, client-side encrypted PWA  
 **Cloud provider:** Optional Google Drive and Google Sheets  
@@ -463,12 +463,15 @@ Moving an entry to Trash creates a new encrypted revision.
 
 The revision must:
 
-- Preserve the encrypted payload.
+- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's identity-bound AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
 - Set status to `trashed`.
 - Record the deletion timestamp.
 - Reference the previous revision.
 
 The change must be committed locally before synchronization.
+
+Creating this revision requires an unlocked journal key. The synchronization
+engine only publishes the resulting encrypted revision and never decrypts it.
 
 ### 11.2 Restoring an Entry
 
@@ -479,7 +482,10 @@ The revision must:
 - Set status to `active`.
 - Clear the deletion timestamp.
 - Reference the previous trashed revision.
-- Preserve the encrypted payload.
+- Preserve the title/body values through authenticated decryption and fresh encryption with the new revision's identity-bound AAD and a fresh nonce, as defined in `DATA_MODEL.md` §7.1.
+
+Creating this revision requires an unlocked journal key. Ciphertext from the
+source revision must not be copied unchanged under the new revision identifier.
 
 ### 11.3 Concurrent Delete and Edit
 

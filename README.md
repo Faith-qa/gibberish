@@ -10,7 +10,7 @@ When you want to revisit your original thoughts, unlock your journal and explici
 
 Your journal belongs to you.
 
-> **Project status:** M0 application foundation implemented. The responsive shell and development tooling are available. All journaling features described below remain planned; this version accepts and stores no journal content.
+> **Project status:** M0 application foundation and M1 cryptography/codec modules implemented. The responsive shell still accepts and stores no journal content. The M1 helpers are tested independently; user-facing journaling, unlocking, persistence, and all other journal workflows described below remain planned.
 
 ---
 
@@ -318,9 +318,32 @@ M0 was verified locally with Node 26.13.0 and pnpm 12.16.1. Node 24 is the CI ta
 
 M0 adds two React component tests and two browser scenarios across five projects (10 browser tests). Browser checks cover layout overflow, runtime errors, external requests, and keyboard skip navigation. Unit/integration suites are discovered under `tests/unit` and `tests/integration`; integration tests begin when domain modules exist.
 
+M1 adds AES-GCM, key-wrapping, recovery, validation, privacy-boundary and codec
+tests, plus browser tests for the pure codec and actual bundled cryptographic
+modules. Playwright builds a test-only harness under ignored `reports/M1/browser/`
+and serves it from memory under the production CSP; it is not shipped in `dist/`.
+The initial Argon2id profile uses 64 MiB, three passes, parallelism one, and a
+32-byte output. Browser measurements are from the development host, including
+mobile emulation; real-device qualification remains future release work.
+
+The revision-bound AAD design requires fresh encryption for every new revision,
+including Trash and restore. See [the cryptographic format](docs/CRYPTOGRAPHY.md)
+and [codec format](docs/GIBBERISH_CODEC.md) for exact encodings, dependency review,
+limits and tests. No journal storage or UI workflow is implemented by these helpers.
+
+Milestone completion reports are local-only at `reports/M{number}/COMPLETION_REPORT.md`
+with supporting output in `logs/`. Incomplete work uses `STATUS_REPORT.md`.
+The entire root `reports/` directory is ignored and must never be committed.
+
 CI runs frozen installation, typecheck, lint, unit tests, production build, browser tests, and `pnpm audit --audit-level=high`. Run the audit locally as well when reviewing dependency changes.
 
-Tests for encryption, data integrity, persistence, and offline operation belong to later milestones. No service worker or PWA manifest is configured in M0 (M5). The shell includes a baseline CSP; production HTTP security headers and CSP hardening remain release work. The HTML policy is applied to production builds only; Vite development removes it to support React Fast Refresh. Production permits inline styles for Tailwind and restricts scripts and connections to the same origin.
+Encryption/codec behavior is covered in M1; journal-domain integrity, persistence
+and offline workflows remain later work. No service worker or PWA manifest is
+configured yet (M5). The baseline production CSP restricts scripts and connections
+to the same origin, adds `wasm-unsafe-eval` for Argon2id's WebAssembly (not general
+JavaScript `unsafe-eval`), and permits inline styles for Tailwind. HTTP security
+headers and further CSP hardening remain release work. Vite development removes
+the HTML policy to support React Fast Refresh.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the complete testing strategy.
 
@@ -331,7 +354,7 @@ Development is divided into ten milestones.
 | Milestone | Description | Status |
 |---|---|---|
 | M0 | Project Foundation | Complete |
-| M1 | Cryptography and Gibberish Codec | Not started |
+| M1 | Cryptography and Gibberish Codec | Complete; verified report kept locally |
 | M2 | Local Storage and Journal Domain | Not started |
 | M3 | Onboarding, Unlocking, and Core UI | Not started |
 | M4 | Trash, Recovery, and Export | Not started |

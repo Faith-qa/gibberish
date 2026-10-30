@@ -139,8 +139,15 @@ Requirements:
 - Never display corrupted or unauthenticated plaintext.
 - Use a versioned encryption envelope to support future format changes.
 - Editing an entry must produce a newly encrypted payload with a fresh nonce.
+- Every new revision, including Trash and restoration, must use fresh encryption with its own revision-bound AAD; preserving content means preserving the title/body values, not reusing ciphertext (`DATA_MODEL.md` §7.1).
 
 The exact envelope structure must be defined in `DATA_MODEL.md`.
+
+M1 implements the byte-level AAD, key-wrapping and recovery profiles documented
+in [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md). That document also records dependency-review
+scope, nonce collision limits, memory-handling limitations and the narrow
+WebAssembly CSP allowance. Tests verify specific properties, not an overall
+security guarantee.
 
 ### 4.4 Encryption Format Versioning
 

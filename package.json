@@ -20,6 +20,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e"
   },
   "dependencies": {
+    "libsodium-wrappers-sumo": "0.8.4",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

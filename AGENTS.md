@@ -202,15 +202,45 @@ Do not claim tests passed unless they were actually executed successfully.
 
 ### Step 6 — Report
 
+Use a separate local directory for each milestone:
+
+```text
+reports/
+  M0/
+    COMPLETION_REPORT.md
+  M1/
+    COMPLETION_REPORT.md
+    logs/
+  M2/
+    COMPLETION_REPORT.md
+    logs/
+```
+
+Write `reports/M{number}/COMPLETION_REPORT.md` when implementation and required
+verification are complete. For incomplete or blocked work, use
+`reports/M{number}/STATUS_REPORT.md` and state the current status explicitly.
+Keep verification logs in `reports/M{number}/logs/` and reference the relevant
+files from the report using relative links. Preserve existing verification
+evidence and log contents when reorganizing reports. Label reconstructed results
+and anything that cannot be independently verified; never invent missing results.
+
+Keep the root `/reports/` rule in `.gitignore` and verify report files are ignored
+with `git check-ignore`. Reports and logs are local only: never stage, commit, or
+push them. Check for already tracked reports before changing their tracking status
+and report any findings first.
+
 Provide a concise completion report containing:
 
+- Milestone objectives and acceptance criteria
 - Implemented functionality
 - Files created or modified
 - Tests added or updated
-- Verification results
+- Verification results (PASS, FAIL, or NOT RUN, with reasons and log references)
+- Security considerations
 - Known limitations
-- Unresolved issues
+- Unresolved issues and blockers
 - Specification deviations
+- Readiness assessment for the next milestone
 
 ### Step 7 — Stop
 

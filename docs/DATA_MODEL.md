@@ -1,6 +1,6 @@
 # Gibberish — Data Model Specification
 
-**Version:** 1.1  
+**Version:** 1.2
 **Product:** Gibberish  
 **Architecture:** Local-first, client-side encrypted PWA  
 **Status:** Technical specification — pending implementation validation
@@ -213,7 +213,7 @@ Requirements:
 - An ordinary edit, deletion, or restoration must reference one parent.
 - A conflict-resolution revision may reference multiple parents.
 - Every revision must use a unique `revisionId`.
-- Every content edit must use a fresh encryption nonce.
+- Every new revision, including Trash, restoration, and conflict resolution, must freshly encrypt the title/body with a fresh encryption nonce and that revision's AAD.
 - Deletion and restoration must create new revisions.
 - Timestamps must use UTC ISO 8601 format.
 - Timestamps must not determine conflict winners.
@@ -323,6 +323,27 @@ Requirements:
 - The cryptography module must own AAD construction.
 - AAD format changes require explicit versioning and compatibility tests.
 
+The canonical M1 AAD bytes, key-wrapping profiles and encrypted-envelope binary
+serialization are defined in [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md). Envelope format
+version 1 is unchanged; no persisted journals exist in M1 to migrate.
+
+### 7.1 Revision-Bound Encryption
+
+The approved M1 design retains the revision identifier in AAD. An encrypted
+payload must never be copied unchanged to a new revision identifier: its
+authentication tag is bound to the original revision.
+
+Creating any new revision, including Trash or restoration, requires an unlocked
+journal key. Preserve the original title/body values by authenticated decryption
+of the source revision followed by fresh encryption under the destination
+revision's identity and a new nonce. Keep plaintext transient and never expose it
+in the UI merely because this internal operation occurred. If source validation,
+decryption, or destination encryption fails, do not create a partial revision or
+report success. Future persistence must commit the complete change atomically.
+
+Synchronization continues to transfer already encrypted revisions without
+decryption. This does not implement journal lifecycle or synchronization in M1.
+
 ## 8. Journal Key Records
 
 Each journal has one randomly generated 256-bit Journal Encryption Key (JEK).
@@ -359,7 +380,9 @@ Requirements:
 - Wrapped key records must not contain plaintext credentials.
 - Wrapped key formats must be versioned.
 
-The exact recovery-key derivation and key import/export process must be verified before implementation.
+The M1 recovery-key derivation, encoding, bounded KDF profiles and in-memory key
+wrapping lifecycle are defined and tested as described in
+[CRYPTOGRAPHY.md](CRYPTOGRAPHY.md). No key record is persisted by M1.
 
 ### 8.2 Journal Key Bundle
 
@@ -632,7 +655,7 @@ The revision must:
 
 - Set `status` to `trashed`.
 - Set `deletedAt` to the deletion timestamp.
-- Preserve the encrypted payload.
+- Preserve the title/body values by authenticating and decrypting the source revision, then freshly encrypting them with the new revision's AAD and a fresh nonce (§7.1).
 - Reference the previous revision.
 - Be committed locally before synchronization.
 
@@ -644,7 +667,7 @@ The revision must:
 
 - Set `status` to `active`.
 - Clear `deletedAt`.
-- Preserve the encrypted payload.
+- Preserve the title/body values by authenticating and decrypting the source revision, then freshly encrypting them with the new revision's AAD and a fresh nonce (§7.1).
 - Reference the previous trashed revision.
 
 ### 15.3 Permanent Deletion Tombstone
@@ -859,7 +882,11 @@ Requirements:
 
 For MVP, Gibberish text must be derived when needed rather than persisted as a separate source of truth.
 
-The codec specification must define which serialized encrypted envelope bytes are encoded and how the representation is versioned.
+The exact bytes encoded for display are the complete binary encrypted envelope
+defined in [CRYPTOGRAPHY.md](CRYPTOGRAPHY.md): version byte, algorithm identifier,
+12-byte nonce, then ciphertext including its authentication tag. These bytes,
+never title/body plaintext, are mapped using the independent v1 format in
+[GIBBERISH_CODEC.md](GIBBERISH_CODEC.md).
 
 ## 19. Encrypted Backup Format
 

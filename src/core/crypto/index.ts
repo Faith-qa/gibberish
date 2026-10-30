@@ -1,0 +1,8 @@
+export { generateJournalKey, encrypt, decrypt, revisionAad } from './aes'
+export { generateRecoveryKey, wrapWithPassphrase, unwrapWithPassphrase, wrapWithRecoveryKey, unwrapWithRecoveryKey } from './wrapping'
+export { validateEnvelope, validateWrappedKey } from './validation'
+export { envelopeToBytes, envelopeFromBytes } from './envelope-bytes'
+export { JournalCryptoError } from './errors'
+export type { CryptoErrorCode } from './errors'
+export { ARGON2ID_PARAMETERS, MAX_PLAINTEXT_BYTES } from './types'
+export type { EncryptedEnvelope, RevisionIdentity, WrappedKeyRecord } from './types'
