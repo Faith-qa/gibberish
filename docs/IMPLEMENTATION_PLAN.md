@@ -286,6 +286,10 @@ Create the first fully usable Gibberish journaling experience.
 17. Implement local save confirmation.
 18. Add accessible loading, empty, and error states.
 19. Add component and end-to-end tests.
+20. Implement approved domain-owned recovery-key authentication and recovery-driven passphrase reset, exact snapshot CAS and reconciliation (approved M3 dependency).
+21. Qualify same-origin KDF worker responsiveness without changing cryptographic parameters.
+
+M3 follows the approved lifecycle and UI contracts in `M3_EXPERIENCE.md`.
 
 ### Deliverables
 
@@ -333,8 +337,8 @@ Complete the local journal lifecycle and provide safe recovery options.
 5. Implement early permanent deletion.
 6. Implement durable tombstone creation.
 7. Remove permanently deleted content from active local revision storage.
-8. Implement passphrase recovery using the recovery key.
-9. Implement passphrase changes.
+8. Retain/regress the recovery-driven reset delivered in M3; extend only approved recovery lifecycle needs.
+9. Implement general passphrase changes/settings (recovery-driven reset is already M3).
 10. Implement encrypted backup export.
 11. Implement encrypted backup validation.
 12. Implement encrypted backup restoration.

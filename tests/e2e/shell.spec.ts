@@ -13,8 +13,8 @@ test('shell loads without errors and fits the viewport', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveTitle('Gibberish')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByText('In development · M0')).toBeVisible()
-  await expect(page.getByText(/You cannot enter or save journal content/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Get started' })).toBeVisible()
+  await expect(page.getByText(/does not back up your journal/)).toBeVisible()
   await expect(page.getByRole('textbox')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect(errors).toEqual([])
@@ -23,6 +23,7 @@ test('shell loads without errors and fits the viewport', async ({ page }) => {
 
 test('keyboard users can skip to the main content', async ({ page }) => {
   await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Get started' })).toBeVisible()
   await page.keyboard.press('Tab')
   const skip = page.getByRole('link', { name: 'Skip to content' })
   await expect(skip).toBeFocused()

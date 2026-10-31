@@ -202,6 +202,9 @@ Requirements:
 - Use the KEK to protect the JEK through authenticated encryption.
 - Reject incorrect passphrases without exposing decrypted data.
 - Do not retain the passphrase after it is no longer needed for the unlock operation.
+- New setup/recovery phrases require at least 15 Unicode code points, nonblank
+  well-formed UTF-8, exact confirmation and the existing 1,024-byte maximum.
+  Never normalize/trim/truncate. Existing shorter phrases still unlock.
 
 ### 5.2 Wrapped Journal Encryption Key
 
@@ -616,3 +619,24 @@ Security testing procedures must be expanded in `TESTING.md`.
 Any change to the cryptographic architecture requires explicit review and documentation before implementation.
 
 Security requirements must not be weakened solely for implementation convenience.
+
+## M3 approved session and recovery contract
+
+The approved policy is specified in [M3_EXPERIENCE.md](M3_EXPERIENCE.md).
+Concealment on visibility hidden clears all plaintext React/form state and drafts
+but retains only private capabilities until the original 300,000-ms deadline.
+Do not describe concealment as lock. Manual lock, expiry and pagehide revoke
+capabilities and invalidate asynchronous generations. Every sensitive command,
+resume and result delivery checks expiry before accepting activity. Per-tab only.
+
+Confirmed setup writes no journal before recovery display/full confirmation and
+acknowledgment. Recovery reset authenticates the entire relevant history with the
+recovered JEK and uses exact bundle/config/device/revision snapshot CAS; preserve
+the JEK, journalId, recovery wrapper and immutable ciphertext. Reconcile uncertain
+outcomes by exact encrypted plans; never infer that revocation undid a committed
+transaction. No keys reach React or persistent storage.
+
+The browser Argon2id computation runs in a same-origin dedicated worker with
+unchanged profile/vectors, bounded jobs, cancellation and typed private messages.
+There is no weaker/main-thread browser fallback. Owned buffers are cleared and
+late keys discarded; browser/GC/engine memory erasure cannot be guaranteed.

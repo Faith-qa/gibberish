@@ -10,7 +10,7 @@ When you want to revisit your original thoughts, unlock your journal and explici
 
 Your journal belongs to you.
 
-> **Project status:** M0 foundation, M1 cryptography/codec, and M2 encrypted storage/domain modules are implemented. M2 verification has passed; its completion report remains local. The responsive shell still accepts and stores no journal content; onboarding, journal UI and automatic locking begin in M3. Domain APIs are exercised by automated tests without connecting them to the UI.
+> **Project status:** M0–M3 are implemented and locally verified. M3 adds confirmed local onboarding, passphrase/recovery access, encrypted journaling, explicit Reveal/Hide and per-tab locking; it awaits milestone review. Reports remain local. Trash, backup/export, Google integration, synchronization and PWA cold launch remain later milestones.
 
 ---
 
@@ -124,7 +124,7 @@ For example:
 - Losing both your passphrase and recovery key may make your journal unrecoverable.
 - Browser storage can be cleared or evicted, so encrypted backups are important.
 - Google-managed file history and independently exported backups may retain copies after application-level deletion.
-- Revealed English is visible on your screen until hidden or locked.
+- Revealed English is visible until hidden, navigated away from, backgrounded or locked. Browser/OS screenshots, clipboard contents and native memory are outside an absolute erasure guarantee.
 
 See [`docs/SECURITY.md`](docs/SECURITY.md) for the complete security design and limitations.
 
@@ -232,7 +232,7 @@ Playwright tests the production build; run `pnpm build` first. It starts and sto
 
 ## Environment Configuration
 
-M0 through M2 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
+M0 through M3 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
 
 Optional Google integration will require Google Cloud project configuration and OAuth client settings.
 
@@ -352,6 +352,49 @@ JavaScript `unsafe-eval`), and permits inline styles for Tailwind. HTTP security
 headers and further CSP hardening remain release work. Vite development removes
 the HTML policy to support React Fast Refresh.
 
+M3 adds domain/controller/component tests and real browser journeys for confirmed
+setup, legacy and recovery unlock, exact passphrase reset, privacy, save failures,
+concurrent branches, deadline checks, keyboard/focus and already-loaded offline
+use. A same-origin module worker keeps the unchanged Argon2id computation off the
+UI thread; native non-extractable key transport is qualified in all five projects.
+Cancellation rejects immediately and discards late keys while the worker drains;
+timeout/error fails closed. Browser emulation and passing tests do not establish
+a security guarantee, real-device qualification or complete WCAG conformance.
+The M3 final local run passed 238 unit/integration/component tests and 105 browser
+tests (21 per project), with no failures, skips or retries. The required audit at
+the high threshold passed with one moderate development-dependency advisory:
+`minimatch` 10.2.6 ([GHSA-g3hv-75wg-m249](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249)).
+An earlier desktop WebKit worker key clone raised `DataCloneError`; subsequent
+qualification and full-suite runs passed. Transport errors still fail closed;
+these host results do not establish universal WebKit or real-device reliability.
+Details and earlier verification failures remain in the local report.
+
+## Using the M3 Local Journal
+
+1. Choose **Get started**, enter a new passphrase (at least 15 Unicode code points,
+   at most 1,024 UTF-8 bytes), and save the independent recovery key separately.
+   Confirm the entire key and acknowledge its importance before initialization.
+2. Create an entry and choose **Save entry locally**. The confirmation follows a
+   committed or verified transaction. Titles use an eight-word envelope preview;
+   detail pages contain the complete reversible encrypted representation.
+3. Choose **Reveal My Thoughts** to read English or edit an existing entry. Hide,
+   navigation, backgrounding and locking clear that English from the UI. Conflicts
+   retain every branch for read-only review; resolution is a later milestone.
+4. Lock this tab manually or allow the five-minute inactivity deadline to expire.
+   Switching apps/tabs immediately conceals content and discards unsaved writing;
+   private authorization may remain until the original deadline. Page exit fully
+   revokes it. This is per-tab locking, not an all-tab lock.
+5. Unlock with the original passphrase, or authenticate with the recovery key to
+   set a replacement passphrase. Existing shorter passphrases still unlock. Reset
+   preserves the journal identity, encryption key, recovery wrapper and revisions.
+
+Passphrases are used exactly as entered. A recovery key unlocks existing encrypted
+data; it cannot restore journal data lost from browser storage. There is no email
+reset, backup export or cloud backup in this milestone. Offline writing/unlocking
+works in an already loaded application; offline cold launch is not implemented.
+Do not clear browser data as a way to fix an error. See
+[`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) for the approved behavior.
+
 See [`docs/TESTING.md`](docs/TESTING.md) for the complete testing strategy.
 
 ## Development Roadmap
@@ -362,8 +405,8 @@ Development is divided into ten milestones.
 |---|---|---|
 | M0 | Project Foundation | Complete |
 | M1 | Cryptography and Gibberish Codec | Complete; verified report kept locally |
-| M2 | Local Storage and Journal Domain | Complete; awaiting milestone review |
-| M3 | Onboarding, Unlocking, and Core UI | Not started |
+| M2 | Local Storage and Journal Domain | Complete |
+| M3 | Onboarding, Unlocking, and Core UI | Locally verified; awaiting milestone review |
 | M4 | Trash, Recovery, and Export | Not started |
 | M5 | PWA and Offline Hardening | Not started |
 | M6 | Google Authentication and Cloud Setup | Not started |
@@ -385,6 +428,7 @@ The project maintains specifications for its key architectural and product decis
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Encrypted records, revision history, and persistence schemas |
 | [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) | Exact v2/legacy v1 cryptographic profiles |
 | [`docs/LOCAL_STORAGE.md`](docs/LOCAL_STORAGE.md) | M2 APIs, transactions, schema and failure recovery |
+| [`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) | Approved setup, recovery, session lifecycle and journal UI contracts |
 | [`docs/SYNC_STRATEGY.md`](docs/SYNC_STRATEGY.md) | Offline synchronization, conflicts, and deletion propagation |
 | [`docs/TESTING.md`](docs/TESTING.md) | Testing strategy and quality gates |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Step-by-step implementation milestones |

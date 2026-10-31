@@ -72,3 +72,13 @@ This is an in-memory synchronous mapper; expansion increases memory use and CPU
 cost for large inputs. It accepts only complete inputs, not a streaming format.
 No real-device performance guarantee is claimed. A different mapping or framing
 requires a new codec version with explicit compatibility tests.
+
+## M3 presentation contract
+
+Use only authenticated operational encrypted-envelope bytes. Eight-word title
+previews are explicitly incomplete prefixes; they cannot recover the full entry.
+Detail paging assembles exactly one canonical gib1 prefix and the same ordered
+words as encode(fullEnvelopeBytes); concatenation must decode byte-for-byte.
+Title/body remain one encrypted payload; do not derive separate title ciphertext,
+use plaintext length/seeds, or persist a redundant Gibberish copy. Locked/concealed
+views display none. The codec implementation/mapping/version is unchanged.

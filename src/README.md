@@ -1,8 +1,8 @@
 # Module boundaries
 
-- `app`: application composition, future providers and routing.
+- `app`: application composition and the private per-tab session controller.
 - `components/ui`: reusable presentation components.
-- `features`: feature UI and interaction orchestration.
+- `features`: onboarding/unlock/recovery forms and journal presentation; commands go through the controller.
 - `core`: framework-independent cryptography, codec, journal domain, encrypted storage, Google adapters, synchronization, and export modules.
 - `hooks`, `types`, `styles`: shared React hooks, shared types, and styling.
 
@@ -10,8 +10,15 @@
 `docs/CRYPTOGRAPHY.md` and `docs/GIBBERISH_CODEC.md`. M2 `core/journal` orchestrates
 v2 encryption, authenticated revision graphs and revocable in-memory capabilities;
 `core/storage` persists only encrypted DTOs with atomic Dexie transactions. See
-`docs/LOCAL_STORAGE.md` for APIs, bounds and failure semantics. The application
-shell does not instantiate the journal domain yet. Other empty directories reserve
-later architecture; no sync, deletion, onboarding or journal UI is implemented.
+`docs/LOCAL_STORAGE.md` for APIs, bounds and failure semantics. M3 confirmed setup,
+recovery reset and authenticated encrypted views live in `core/journal`. The app
+controller privately owns capabilities, deadlines, generation guards and sealed
+retry evidence. React receives presentation DTOs and transient authored/explicitly
+revealed payloads, never JournalSession, setup/recovery handles or keys. See
+`docs/M3_EXPERIENCE.md` for concealment, revocation and exact save/reset outcomes.
+Browser Argon2id runs in a same-origin worker with unchanged parameters. Ordinary
+cancellation rejects immediately and discards the result while the worker drains;
+timeout/error terminates it without a weaker fallback. No sync, deletion, backup
+export or service worker is implemented. Other empty directories reserve later work.
 Core modules must not import React. Storage and cloud adapters must never receive
 plaintext journal content or unwrapped keys.

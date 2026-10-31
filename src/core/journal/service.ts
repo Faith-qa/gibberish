@@ -1,15 +1,18 @@
 import { decryptRevision, encryptRevision, generateJournalKey, generateRecoveryKey, JournalCryptoError, MAX_PLAINTEXT_BYTES,
   unwrapWithPassphrase, wrapWithPassphrase, wrapWithRecoveryKey } from '../crypto'
 import type { EncryptedJournalRevision, RevisionMetadata } from '../crypto'
-import { record } from '../crypto/validation'
 import { browserCrypto } from '../crypto/random'
 import type { EncryptedJournalRepository } from '../storage'
-import { check, id, same, validateState, validateWrite } from '../storage/validation'
-import type { CommitReceipt, EntryProjection, JournalKeys, JournalState, PreparedWrite } from '../storage'
+import { check, id, same, validateResetPlan, validateState, validateWrite } from '../storage/validation'
+import type { CommitReceipt, EntryProjection, EntryView, JournalKeys, JournalState, PassphraseResetPlan, PreparedWrite } from '../storage'
 import { JournalError } from './errors'
 import { projectHistory, projectJournal } from './graph'
+import { JournalAccess } from './access'
+import type { SetupHandle, RecoveryHandle } from './access'
+import { authenticateRows, payload, decodePayload, notAborted } from './content'
+import type { JournalPayload } from './content'
 
-export interface JournalPayload { title: string; body: string }
+export type { JournalPayload } from './content'
 /** Opaque, revocable in-memory capability. It contains no serializable key. */
 export interface JournalSession { close(): void }
 interface SessionState { journalId: string; key: CryptoKey; keys: JournalKeys }
@@ -26,21 +29,22 @@ function mint(state: SessionState): JournalSession {
   sessions.set(session, state)
   return session
 }
-function payload(value: unknown): JournalPayload {
-  const input = record(value, ['title', 'body'])
-  check(typeof input.title === 'string' && input.title.trim().length > 0 && typeof input.body === 'string' && input.body.trim().length > 0)
-  return { title: input.title, body: input.body }
-}
-function decodePayload(bytes: Uint8Array): JournalPayload {
-  try { return payload(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) }
-  catch { throw new JournalError('INTEGRITY_ERROR') }
-  finally { bytes.fill(0) }
-}
 function uuid(): string { return browserCrypto().randomUUID() }
 
 export class JournalService {
   readonly #repository: EncryptedJournalRepository
-  constructor(repository: EncryptedJournalRepository) { this.#repository = repository }
+  readonly #access: JournalAccess
+  constructor(repository: EncryptedJournalRepository) { this.#repository = repository; this.#access = new JournalAccess(repository, mint) }
+
+  discoverJournal() { return this.#repository.discoverJournal() }
+  prepareJournal(passphrase: string, confirmation: string, signal?: AbortSignal) { return this.#access.prepareJournal(passphrase, confirmation, signal) }
+  getRecoveryKey(handle: SetupHandle) { return this.#access.getRecoveryKey(handle) }
+  confirmJournal(handle: SetupHandle, confirmation: string, acknowledged: boolean, signal?: AbortSignal) { return this.#access.confirmJournal(handle, confirmation, acknowledged, signal) }
+  authenticateRecovery(journalId: string, credential: string, signal?: AbortSignal) { return this.#access.authenticateRecovery(journalId, credential, signal) }
+  preparePassphraseReset(handle: RecoveryHandle, passphrase: string, confirmation: string, signal?: AbortSignal) { return this.#access.preparePassphraseReset(handle, passphrase, confirmation, signal) }
+  preparedPassphraseReset(handle: RecoveryHandle) { return this.#access.preparedPassphraseReset(handle) }
+  commitPassphraseReset(handle: RecoveryHandle, plan: PassphraseResetPlan, signal?: AbortSignal) { return this.#access.commitPassphraseReset(handle, plan, signal) }
+  reconcileRecoveryReset(handle: RecoveryHandle, plan: PassphraseResetPlan) { return this.#access.reconcileRecoveryReset(handle, plan) }
 
   async initializeJournal(passphrase: string): Promise<{ journalId: string; recoveryKey: string; session: JournalSession }> {
     const journalId = uuid(); const deviceId = uuid(); const createdAt = new Date().toISOString()
@@ -61,9 +65,11 @@ export class JournalService {
     return { journalId, recoveryKey, session: mint({ journalId, key, keys: state.keys }) }
   }
 
-  async unlockJournal(journalId: string, passphrase: string): Promise<JournalSession> {
+  async unlockJournal(journalId: string, passphrase: string, signal?: AbortSignal): Promise<JournalSession> {
+    notAborted(signal)
     const state = await this.#repository.readJournal(journalId)
-    const key = await unwrapWithPassphrase(state.keys.passphraseWrappedKey, passphrase, journalId)
+    const key = await unwrapWithPassphrase(state.keys.passphraseWrappedKey, passphrase, journalId, signal)
+    notAborted(signal)
     return mint({ journalId, key, keys: state.keys })
   }
 
@@ -76,11 +82,7 @@ export class JournalService {
 
   async #authenticate(session: JournalSession, journal: JournalState, rows: readonly EncryptedJournalRevision[]): Promise<void> {
     const state = this.#authorize(session, journal)
-    for (const r of rows) {
-      check(r.journalId === state.journalId, 'INTEGRITY_ERROR')
-      decodePayload(await decryptRevision(r, state.key, { journalId: state.journalId, entryId: r.entryId }))
-      sessionState(session)
-    }
+    await authenticateRows(state.key, state.journalId, rows, () => { sessionState(session) })
   }
 
   async #seal(session: JournalSession, value: unknown, metadata: RevisionMetadata): Promise<EncryptedJournalRevision> {
@@ -178,6 +180,45 @@ export class JournalService {
     const projections = projectJournal(snapshot.revisions).filter((p) => p.status !== 'trashed')
     sessionState(session)
     return projections
+  }
+
+  async listEntryViews(session: JournalSession): Promise<EntryView[]> {
+    const state = sessionState(session)
+    const snapshot = await this.#repository.readJournalSnapshot(state.journalId)
+    await this.#authenticate(session, snapshot.journal, snapshot.revisions)
+    const byId = new Map(snapshot.revisions.map((row) => [row.revisionId, row]))
+    const views = projectJournal(snapshot.revisions).filter((p) => p.status !== 'trashed').map((projection) => Object.freeze({
+      projection, heads: Object.freeze(projection.headRevisionIds.map((id) => { const row = byId.get(id); check(row, 'INCOMPLETE_HISTORY'); return row })),
+    }))
+    sessionState(session)
+    return views
+  }
+
+  async readEncryptedEntry(session: JournalSession, entryId: string, revisionId?: string): Promise<{ projection: EntryProjection; revision: EncryptedJournalRevision }> {
+    const state = sessionState(session)
+    const snapshot = await this.#repository.readEntrySnapshot(state.journalId, entryId)
+    await this.#authenticate(session, snapshot.journal, snapshot.revisions)
+    const projection = projectHistory(snapshot.revisions); check(projection, 'NOT_FOUND')
+    if (!revisionId && projection.status === 'conflicted') throw new JournalError('CONFLICT')
+    const revision = snapshot.revisions.find((r) => r.revisionId === (revisionId ?? projection.headRevisionIds[0])); check(revision, 'NOT_FOUND')
+    sessionState(session)
+    return { projection, revision }
+  }
+
+  async inspectPassphraseReset(session: JournalSession, input: PassphraseResetPlan): Promise<'committed' | 'not-committed'> {
+    const { expected, nextKeys: next } = validateResetPlan(input)
+    const state = sessionState(session)
+    check(next.journalId === state.journalId && expected.journal.config.journalId === state.journalId)
+    const current = await this.#repository.readJournalSnapshot(state.journalId)
+    await this.#authenticate(session, current.journal, current.revisions); projectJournal(current.revisions)
+    for (const previous of expected.revisions) {
+      const row = current.revisions.find((r) => r.revisionId === previous.revisionId)
+      check(row, 'INCOMPLETE_HISTORY'); check(same(row, previous), 'ID_COLLISION')
+    }
+    const committed = same(current.journal.keys, next)
+    check(committed || same(current.journal.keys, expected.journal.keys), 'AUTHORIZATION_CHANGED')
+    sessionState(session)
+    return committed ? 'committed' : 'not-committed'
   }
 
   async readEntry(session: JournalSession, entryId: string, revisionId?: string): Promise<{ projection: EntryProjection; revisionId: string; payload: JournalPayload }> {

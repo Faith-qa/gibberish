@@ -300,8 +300,9 @@ Pure graph reducers remain framework/database independent. Dexie read/write
 transactions and exact snapshot checks are the multi-tab correctness mechanism;
 Web Locks are not required. Persisted projections/verification flags are hints,
 not authenticated history. Domain listings require a usable key/capability and
-verify metadata before returning any timeline information. No M3 UI/session
-manager or later cloud/deletion implementation is implied by these contracts.
+verify metadata before returning any timeline information. The M3 application
+controller owns session lifecycle and calls these domain contracts; later cloud/
+deletion workflows remain unimplemented.
 
 ### 6.5 `core/google`
 
@@ -371,13 +372,23 @@ Generate independent recovery key
 Create recovery-wrapped key record
         |
         v
-Persist wrapped keys locally
+Display recovery key from volatile setup state
+        |
+        v
+Full-key confirmation and explicit saved/loss acknowledgment
+        |
+        v
+Atomically persist wrapped keys/config/device locally
         |
         v
 Journal ready
 ```
 
 No Google account is required.
+
+Nothing is persisted before confirmation. Keep prepared material only in a
+revocable setup capability; cancellation/expiry/pagehide discards it. New
+passphrase policy and uncertain initialization follow `M3_EXPERIENCE.md`.
 
 ### 7.2 Creating an Entry
 
@@ -505,6 +516,9 @@ type JournalSessionState =
   | "uninitialized"
   | "locked"
   | "unlocking"
+  | "preparing"
+  | "confirming"
+  | "concealed"
   | "unlocked"
   | "recovering"
   | "error";
@@ -512,11 +526,16 @@ type JournalSessionState =
 
 Rules:
 
-- Only an unlocked session may decrypt entries.
+- Only privately authenticated, live journal/recovery authorization may decrypt
+  history. Recovery authentication verifies history privately; timeline access
+  follows the committed/reconciled reset. It never exposes a raw key to React.
 - Locking must clear decrypted content and active key references as far as technically possible.
 - The journal must lock after five minutes of inactivity.
 - The application must recheck elapsed inactivity when returning from the background.
-- Backgrounding must immediately hide revealed English.
+- Backgrounding immediately clears plaintext UI, revealed English, credentials
+  and unsealed drafts. Concealed authorization expires at the original deadline;
+  it is distinct from a full lock. Manual lock, expiry and pagehide fully revoke,
+  per tab, and stale async results must not restore the old state.
 - Google authentication must not alter journal unlock state.
 
 The application must avoid storing decrypted journal content in persistent state managers.
@@ -856,3 +875,17 @@ Security controls and cryptographic requirements belong in `SECURITY.md`.
 Implementation sequencing belongs in `IMPLEMENTATION_PLAN.md`.
 
 Changes to the architectural model must be documented before dependent code is modified.
+
+## M3 approved application boundary
+
+Use a small framework-independent application controller and a React view adapter;
+no new routing/state framework. The controller privately owns JournalSession,
+setup/recovery handles, deadlines, abort/generation guards and sealed retry plans.
+React receives commands and view data, never a key or Dexie/table handle.
+
+Add minimal validated journal discovery, confirmed two-phase setup, domain-owned
+recovery/reset and authenticated encrypted-view APIs. Snapshot authentication
+remains in core/journal, encryption in core/crypto and transactions in core/storage.
+The native KDF worker changes execution location, not any cryptographic format.
+The view-state union must not carry journal metadata while locked/concealed.
+[M3_EXPERIENCE.md](M3_EXPERIENCE.md) defines lifecycle, UI and failure contracts.

@@ -41,13 +41,13 @@ function wrappingAad(record: WrappedKeyRecord, journalId: string): Uint8Array<Ar
   ]))
 }
 
-async function kek(credential: string, record: WrappedKeyRecord, journalId: string): Promise<CryptoKey> {
+async function kek(credential: string, record: WrappedKeyRecord, journalId: string, signal?: AbortSignal): Promise<CryptoKey> {
   const salt = fromBase64url(record.kdf.salt, 16, 16)
   return record.purpose === 'passphrase'
-    ? passphraseKek(credential, salt) : recoveryKek(credential, salt, journalId)
+    ? passphraseKek(credential, salt, signal) : recoveryKek(credential, salt, journalId)
 }
 
-async function wrap(key: CryptoKey, credential: string, journalId: string, purpose: WrappedKeyRecord['purpose']): Promise<WrappedKeyRecord> {
+async function wrap(key: CryptoKey, credential: string, journalId: string, purpose: WrappedKeyRecord['purpose'], signal?: AbortSignal): Promise<WrappedKeyRecord> {
   const api = browserCrypto()
   validateJournalId(journalId)
   validateJournalKey(key, 'encrypt')
@@ -59,7 +59,7 @@ async function wrap(key: CryptoKey, credential: string, journalId: string, purpo
       salt: toBase64url(randomBytes(16)),
       parameters: purpose === 'passphrase' ? ARGON2ID_PARAMETERS : RECOVERY_PARAMETERS },
   }
-  const wrappingKey = await kek(credential, metadata, journalId)
+  const wrappingKey = await kek(credential, metadata, journalId, signal)
   const nonce = freshNonce()
   try {
     const ciphertext = await api.subtle.wrapKey('raw', key, wrappingKey,
@@ -70,11 +70,11 @@ async function wrap(key: CryptoKey, credential: string, journalId: string, purpo
   }
 }
 
-async function unwrap(input: unknown, credential: string, journalId: string, purpose: WrappedKeyRecord['purpose']): Promise<CryptoKey> {
+async function unwrap(input: unknown, credential: string, journalId: string, purpose: WrappedKeyRecord['purpose'], signal?: AbortSignal): Promise<CryptoKey> {
   const api = browserCrypto()
   validateJournalId(journalId)
   const record = validateWrappedKey(input, purpose)
-  const wrappingKey = await kek(credential, record, journalId)
+  const wrappingKey = await kek(credential, record, journalId, signal)
   try {
     return await api.subtle.unwrapKey('raw', fromBase64url(record.wrappedKey, 48, 48), wrappingKey,
       { name: 'AES-GCM', iv: fromBase64url(record.nonce, 12, 12), additionalData: wrappingAad(record, journalId), tagLength: 128 },
@@ -84,7 +84,7 @@ async function unwrap(input: unknown, credential: string, journalId: string, pur
   }
 }
 
-export const wrapWithPassphrase = (key: CryptoKey, passphrase: string, journalId: string) => wrap(key, passphrase, journalId, 'passphrase')
-export const unwrapWithPassphrase = (record: unknown, passphrase: string, journalId: string) => unwrap(record, passphrase, journalId, 'passphrase')
+export const wrapWithPassphrase = (key: CryptoKey, passphrase: string, journalId: string, signal?: AbortSignal) => wrap(key, passphrase, journalId, 'passphrase', signal)
+export const unwrapWithPassphrase = (record: unknown, passphrase: string, journalId: string, signal?: AbortSignal) => unwrap(record, passphrase, journalId, 'passphrase', signal)
 export const wrapWithRecoveryKey = (key: CryptoKey, recoveryKey: string, journalId: string) => wrap(key, recoveryKey, journalId, 'recovery')
 export const unwrapWithRecoveryKey = (record: unknown, recoveryKey: string, journalId: string) => unwrap(record, recoveryKey, journalId, 'recovery')

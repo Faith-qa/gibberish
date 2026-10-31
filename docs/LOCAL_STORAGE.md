@@ -1,8 +1,9 @@
-# M2 encrypted local storage contract
+# Encrypted local storage and access contract
 
-The domain is independent of React. The application shell does not instantiate
-these modules yet; onboarding, UI state and inactivity management belong to M3.
-M2 implements no cloud worker, import, Trash, retention or permanent deletion.
+The domain is independent of React. M3 composes it through a private application
+controller for onboarding, UI state and inactivity management. The M2 database
+schema and immutable revision/transaction contracts are unchanged. No cloud
+worker, import, Trash, retention or permanent deletion is implemented.
 
 ## Ownership and trust
 
@@ -26,9 +27,10 @@ initialization or successful passphrase unwrap. Its associated CryptoKey lives
 in a private WeakMap, never in a DTO. Fabricated/closed capabilities are rejected
 before timeline reads. Keys must match the current validated bundle. Closing
 the capability during an async operation prevents returned plaintext and aborts
-an in-flight transaction at its authorization checks. M3 must close it on lock,
-manage five-minute inactivity/resume and clear caller-owned plaintext UI state.
-M2 has no event/timer-based UI session manager.
+an in-flight transaction at its authorization checks. The M3 controller closes it
+on lock, manages five-minute inactivity/resume and clears caller-owned plaintext
+UI state. Background concealment retains private authorization only until the
+original deadline; it is not a full lock. See `M3_EXPERIENCE.md`.
 
 ## Database version 1
 
@@ -52,6 +54,7 @@ synthetic database names; production code never deletes a database on failure.
 
 Explicit `journalId` indexes on revisions and projections are a small correction
 to the design-review index sketch: virtual compound-prefix queries can omit
+
 records whose trailing fields are missing/null. Active entries have a null
 deletedAt. Journal-wide validation/rebuild must include them, including malformed
 records with a valid journal ID. Compound indexes require all indexed values to
@@ -79,14 +82,21 @@ Create `new JournalService(await openRepository())`. Exposed operations are:
 
 | API | Responsibility |
 |---|---|
-| `initializeJournal(passphrase)` | Generate journal/device IDs, JEK, independent recovery material and two wrappers; atomically persist only config/wrappers/device; return journalId, recoveryKey and session in memory |
+| `initializeJournal(passphrase)` | Non-UI M2 compatibility helper; the application exclusively uses confirmed two-phase setup below |
+| `discoverJournal()` | Return empty/existing and a private journal locator, or fail closed on partial/unsupported data; never return timeline metadata |
+| `prepareJournal(passphrase, confirmation, signal?)` | Validate new-passphrase policy and prepare JEK, recovery material and wrappers in an opaque volatile setup capability; write nothing |
+| `getRecoveryKey(setup)` / `confirmJournal(setup, fullKey, acknowledged, signal?)` | Deliberate recovery-key display, exact full-key confirmation and acknowledgment before atomic initialization; reconcile uncertain persistence before session adoption |
 | `unlockJournal(journalId, passphrase)` | Validate bundle and unwrap into an opaque capability |
+| `authenticateRecovery(journalId, credential, signal?)` | Authenticate the recovery wrapper and complete immutable history into an opaque recovery capability |
+| `preparePassphraseReset` / `preparedPassphraseReset` | Prepare and retain one owned encrypted replacement plan; no persistence or raw-key return |
+| `commitPassphraseReset` / `reconcileRecoveryReset` / `inspectPassphraseReset` | Exact bundle/config/device/revision snapshot CAS, bounded races and authenticated exact-outcome reconciliation; retain JEK, recovery wrapper and revisions |
 | `prepareCreate(session, payload)` | Validate title/body, prepare fresh active root and stable operation/conflict IDs |
 | `prepareEdit(session, entryId, baseRevisionId, payload)` | Authenticate history and prepare a fresh child of the explicitly selected active base |
 | `commitWrite(session, prepared)` | Authenticate, commit with exact preconditions, preserve races, reconcile uncertainty |
 | `createEntry` / `editEntry` | Convenience prepare plus commit; callers needing retry evidence should retain their prepared plan |
 | `listEntries(session)` | Authenticate all local history and return metadata projections, withholding errors/conflicts from automatic winner selection |
 | `readEntry(session, entryId, revisionId?)` | Authenticate full entry history; return transient payload; require explicit revision selection for conflicts |
+| `listEntryViews(session)` / `readEncryptedEntry(session, entryId, revisionId?)` | Authenticate and validate history before returning encrypted heads and metadata from the same snapshot, without a plaintext payload |
 | `rebuildProjections(session)` | Authenticate a journal snapshot and atomically replace disposable caches |
 | `inspectCommit(session, prepared)` | Reauthenticate and reconcile a retained encrypted plan after an uncertain receipt |
 
@@ -96,7 +106,7 @@ once. The 16 MiB helper bound applies to serialized bytes. English exists only
 transiently in caller memory and decrypt buffers; owned byte buffers are cleared
 in finally blocks. JavaScript strings and browser memory cannot be securely erased.
 
-Repository contracts: `initializeJournal`, `readJournal`, `readEntrySnapshot`,
+Repository contracts: `discoverJournal`, `initializeJournal`, `replaceJournalKeys`, `readJournal`, `readEntrySnapshot`,
 `readJournalSnapshot`, `commitPreparedRevision`, `reconcileCommit`,
 `rebuildProjectionCache`, `close`. The concrete Dexie adapter is internal to the
 storage module. The domain supplies the authorization check and authenticated
@@ -188,3 +198,17 @@ tests. Review covered package metadata, licensing, dependency scope, relevant
 upstream APIs/releases, transaction semantics and exercised browser behavior.
 This is not an independent security audit or provenance verification of every
 instruction. The lockfile and vulnerability audit remain required gates.
+
+## M3 approved extensions
+
+Minimal discovery distinguishes truly empty (all nine stores empty), valid existing
+configuration and unavailable/corrupt/unsupported state without a keyless timeline.
+Confirmed onboarding prepares volatile material before the existing atomic init.
+Authenticated encrypted views return matching heads/projections from one validated
+snapshot. React never consumes low-level untrusted snapshots or verification flags.
+
+Recovery-driven reset adds a dedicated exact snapshot/bundle CAS and reconciliation
+contract. Crypto/authentication/wrapping stays outside IDB; preserve immutable rows
+and recovery wrapper. Sealed retry plans may be retained privately in memory after
+lock but are not persisted as drafts or fake cloud operations. No database/table
+format changes. See [M3_EXPERIENCE.md](M3_EXPERIENCE.md).

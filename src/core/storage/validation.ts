@@ -2,7 +2,7 @@ import { validateRevision, validateWrappedKey } from '../crypto'
 import { record, validateJournalId } from '../crypto/validation'
 import { validateTimestamp } from '../crypto/revision'
 import { JournalError } from '../journal/errors'
-import type { DeviceConfig, EntrySnapshot, JournalConfig, JournalKeys, JournalSnapshot, JournalState, PreparedWrite, SyncOperation } from './types'
+import type { DeviceConfig, EntrySnapshot, JournalConfig, JournalKeys, JournalSnapshot, JournalState, PassphraseResetPlan, PreparedWrite, SyncOperation } from './types'
 
 export function id(value: unknown): asserts value is string { validateJournalId(value) }
 export function time(value: unknown): asserts value is string { validateTimestamp(value) }
@@ -66,6 +66,13 @@ export function validateWrite(value: unknown): PreparedWrite {
   id(r.operationId); id(r.conflictId); time(r.detectedAt)
   check(expected.entryId === revision.entryId && expected.journal.config.journalId === revision.journalId, 'INTEGRITY_ERROR')
   return Object.freeze({ expected, revision, operationId: r.operationId, conflictId: r.conflictId, detectedAt: r.detectedAt })
+}
+export function validateResetPlan(value: unknown): PassphraseResetPlan {
+  const r = record(value, ['expected', 'nextKeys'])
+  const expected = validateJournalSnapshot(r.expected); const nextKeys = validateKeys(r.nextKeys)
+  check(nextKeys.journalId === expected.journal.config.journalId
+    && same(nextKeys.recoveryWrappedKey, expected.journal.keys.recoveryWrappedKey))
+  return Object.freeze({ expected, nextKeys })
 }
 export function validateOperation(value: unknown): SyncOperation {
   const r = record(value, ['operationId', 'journalId', 'entryId', 'revisionId', 'type', 'state', 'createdAt', 'attempts', 'lastAttemptAt'])

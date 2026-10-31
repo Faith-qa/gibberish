@@ -3,8 +3,8 @@ import { JournalCryptoError } from '../crypto'
 import { JournalError } from '../journal/errors'
 import { projectHistory, projectJournal } from '../journal/graph'
 import { JournalDatabase, openDatabase } from './database'
-import { check, id, MAX_HISTORY_REVISIONS, same, time, validateJournalSnapshot, validateOperation, validateSnapshot, validateState, validateWrite } from './validation'
-import type { CommitReceipt, EntryProjection, EntrySnapshot, JournalSnapshot, JournalState, PreparedWrite } from './types'
+import { check, id, MAX_HISTORY_REVISIONS, same, time, validateJournalSnapshot, validateKeys, validateOperation, validateSnapshot, validateState, validateWrite } from './validation'
+import type { CommitReceipt, EntryProjection, EntrySnapshot, JournalDiscovery, JournalKeys, JournalSnapshot, JournalState, PreparedWrite } from './types'
 
 export class EncryptedJournalRepository {
   readonly #db: JournalDatabase
@@ -48,13 +48,28 @@ export class EncryptedJournalRepository {
       revisions: await this.#db.journal_revisions.where('journalId').equals(journalId).limit(MAX_HISTORY_REVISIONS + 1).toArray() })
   }
 
-  async initializeJournal(input: JournalState): Promise<void> {
+  async discoverJournal(): Promise<JournalDiscovery> {
+    return this.#guard(() => this.#db.transaction('r', this.#db.tables, async () => {
+      const configs = await this.#db.journal_config.limit(2).toArray()
+      if (configs.length === 0) {
+        for (const table of this.#db.tables) check(await table.count() === 0, 'INTEGRITY_ERROR')
+        return { kind: 'empty' as const }
+      }
+      check(configs.length === 1, 'INTEGRITY_ERROR')
+      const config = configs[0]; check(config, 'INTEGRITY_ERROR'); id(config.journalId)
+      await this.#state(config.journalId)
+      return { kind: 'existing' as const, journalId: config.journalId }
+    }))
+  }
+
+  async initializeJournal(input: JournalState, authorize: () => void = () => {}): Promise<void> {
     const state = validateState(input)
     // Initialization is strictly local-only. Synthetic cloud fixtures can be
     // established through the internal adapter, not a product connection flow.
     check(!state.device.cloudEnabled && state.device.lastSuccessfulSyncAt === null)
     return this.#guard(() => this.#db.transaction('rw', this.#db.tables, async () => {
       const db = this.#db
+      authorize()
       const existing = await db.journal_config.limit(2).toArray()
       if (existing.length > 0) {
         check(existing.length === 1 && existing[0]?.journalId === state.config.journalId, 'JOURNAL_EXISTS')
@@ -65,6 +80,20 @@ export class EncryptedJournalRepository {
       await db.journal_keys.add(state.keys)
       await db.journal_config.add(state.config)
       await db.device_config.add(state.device)
+      authorize()
+    }))
+  }
+
+  async replaceJournalKeys(expected: JournalSnapshot, replacement: JournalKeys, authorize: () => void): Promise<void> {
+    const snapshot = validateJournalSnapshot(expected); const next = validateKeys(replacement)
+    check(next.journalId === snapshot.journal.config.journalId && !snapshot.journal.device.cloudEnabled)
+    check(same(next.recoveryWrappedKey, snapshot.journal.keys.recoveryWrappedKey))
+    return this.#guard(() => this.#db.transaction('rw', this.#scope(), async () => {
+      const current = await this.#journal(next.journalId)
+      authorize()
+      check(same(current, snapshot), 'STALE_SNAPSHOT')
+      await this.#db.journal_keys.put(next)
+      authorize()
     }))
   }
 

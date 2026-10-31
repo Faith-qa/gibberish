@@ -1028,3 +1028,14 @@ This document defines the data contracts for Gibberish MVP v1.
 `SYNC_STRATEGY.md` is authoritative for synchronization sequencing, conflict handling, and deletion propagation.
 
 Changes to persisted record formats require explicit schema versioning, migration consideration, and relevant tests.
+
+## M3 integration (unchanged persisted formats)
+
+Database schema 1, envelope/AAD 2, wrapping 1 and codec 1 remain unchanged.
+Setup/recovery/session handles are opaque volatile capabilities, never DTOs.
+Encrypted reset plans contain only an exact authenticated journal snapshot and
+validated replacement wrapped-key bundle. Reset CAS writes journal_keys only and
+compares config/device/bundle/revisions atomically. Unsupported cloud-enabled
+replacement fails closed; M3 adds no cloud publication worker or pending-key flow.
+Gibberish is derived on demand from authenticated envelope bytes, never persisted
+as redundant title/body fields. See [M3_EXPERIENCE.md](M3_EXPERIENCE.md).

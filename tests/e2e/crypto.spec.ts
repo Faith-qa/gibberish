@@ -11,7 +11,7 @@ test('M1 encryption, Argon2id and recovery work under the production CSP', async
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
-  await page.route('**/__m1/**', async (route) => {
+  await page.context().route('**/__m1/**', async (route) => {
     const name = basename(new URL(route.request().url()).pathname)
     if (!name.endsWith('.js')) { await route.abort(); return }
     await route.fulfill({ contentType: 'text/javascript', body: await readFile(resolve('reports/M1/browser', name)) })

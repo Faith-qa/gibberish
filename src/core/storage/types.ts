@@ -13,6 +13,9 @@ export interface DeviceConfig {
 export interface JournalState { config: JournalConfig; keys: JournalKeys; device: DeviceConfig }
 export interface EntrySnapshot { journal: JournalState; entryId: string; revisions: readonly EncryptedJournalRevision[] }
 export interface JournalSnapshot { journal: JournalState; revisions: readonly EncryptedJournalRevision[] }
+export type JournalDiscovery = { kind: 'empty' } | { kind: 'existing'; journalId: string }
+export interface PassphraseResetPlan { expected: JournalSnapshot; nextKeys: JournalKeys }
+export interface EntryView { projection: EntryProjection; heads: readonly EncryptedJournalRevision[] }
 export interface EntryProjection {
   journalId: string; entryId: string; headRevisionIds: readonly string[]
   status: 'active' | 'trashed' | 'conflicted'; createdAt: string; updatedAt: string; deletedAt: string | null

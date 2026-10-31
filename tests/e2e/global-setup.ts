@@ -8,7 +8,10 @@ export default async function globalSetup() {
   // shipping test harnesses/fixtures in the production application.
   await build({
     configFile: false,
+    base: './',
+    worker: { format: 'es' },
     build: {
+      assetsDir: '',
       outDir: 'reports/M1/browser',
       emptyOutDir: true,
       lib: { entry: 'tests/browser/m1.ts', formats: ['es'], fileName: 'm1-harness' },
@@ -16,7 +19,10 @@ export default async function globalSetup() {
   })
   await build({
     configFile: false,
+    base: './',
+    worker: { format: 'es' },
     build: {
+      assetsDir: '',
       outDir: 'reports/M2/browser',
       emptyOutDir: true,
       lib: { entry: 'tests/browser/m2.ts', formats: ['es'], fileName: 'm2-harness' },

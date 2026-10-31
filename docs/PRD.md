@@ -45,7 +45,10 @@ Shared journals, social features, and collaboration are excluded.
 
 1. The user opens Gibberish in a browser or from their device's home screen.
 2. The user creates a journal passphrase.
-3. Gibberish generates a separate recovery key and guides the user to save it securely.
+3. Gibberish prepares keys/wrappers in memory, displays a separate recovery key,
+   and requires full-key confirmation plus explicit saved/loss acknowledgment
+   before committing local journal initialization. The key unlocks existing data;
+   it does not back up journal data lost from browser storage.
 4. The user chooses whether to connect Google Drive or continue with local-only storage.
 5. The user creates a journal entry in English.
 6. Gibberish encrypts the entry locally before persistence.
@@ -398,3 +401,27 @@ This PRD defines Gibberish MVP behavior, user experience, and scope.
 Implementation details belong in `SECURITY.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `SYNC_STRATEGY.md`, and `TESTING.md`.
 
 Changes to MVP scope must be reviewed and reflected in the implementation plan before Codex begins dependent work.
+
+## M3 approved behavior (2026-10-31)
+
+Onboarding prepares keys/wrappers in memory, displays the independent recovery
+key, requires full-key confirmation and explicit acknowledgment before atomic
+initialization. New passphrases require at least 15 Unicode code points, nonblank
+well-formed UTF-8, exact confirmation and at most 1,024 UTF-8 bytes. No trimming,
+normalization or truncation; existing shorter passphrases remain valid on unlock.
+A recovery key unlocks existing ciphertext and is not a backup of deleted data.
+
+Hidden pages immediately clear plaintext UI, revealed content and unsealed drafts.
+Only private authorized/setup capabilities survive until their original five-minute
+inactivity deadline. Concealed is not locked. Manual lock, expiry and pagehide
+fully revoke, per tab. Resume checks the original deadline before activity/view
+restoration; English and drafts never automatically return. Warn before writing
+that switching apps/tabs can discard unsaved text.
+
+Recovery-key authentication and recovery-driven passphrase reset are M3. Default
+views use an eight-word preview of the authenticated single title/body envelope
+and complete reversible Gibberish detail with bounded paging. Previews are labelled
+incomplete. Reveal is required before reading/editing stored English; new-entry
+authoring remains English. Conflicts are preserved with readonly branch access,
+not resolved. Local save confirmation requires verified committed persistence.
+See [M3_EXPERIENCE.md](M3_EXPERIENCE.md) for exact boundary/lifecycle contracts.

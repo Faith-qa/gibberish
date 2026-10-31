@@ -1123,3 +1123,20 @@ operation, and persistent-profile browser restart. A fake database cannot prove
 on-disk browser persistence. Do not implement onboarding or journal UI just to
 exercise these APIs. Save raw verification output locally under reports/M2/logs;
 no M2 completion report until required checks and acceptance criteria pass.
+
+## M3 approved acceptance gates
+
+Preserve all M1/M2 regressions. Add confirmed-before-write setup, discovery errors,
+new/legacy passphrase policy, recovery authentication and exact reset CAS/races/
+rollback/uncertain outcomes, locked metadata privacy, deadline boundaries/resume/
+clock changes, background draft clearing, late asynchronous result suppression,
+per-tab session disposal, KDF worker cancellation/responsiveness, authenticated
+ciphertext-only views, exact paged codec output, reveal-before-edit, commit-before-
+saved messaging, failed saves/retries and concurrent branch preservation.
+
+Use unit/integration/component and all five browser projects, synthetic data only.
+Test real UI plus IndexedDB across reload, offline use of already loaded assets,
+keyboard/focus/reflow and error cases. Distinguish simulated lifecycle events from
+real-device suspension; record actual counts/failures/retries and NOT RUN manual
+scenarios. No claims of offline cold launch, guaranteed erasure or WCAG certification.
+Run all seven commands in [M3_EXPERIENCE.md](M3_EXPERIENCE.md); keep output ignored.

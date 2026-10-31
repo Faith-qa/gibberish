@@ -242,3 +242,35 @@ Sync can transfer bytes while locked, but promotion is deferred until the unlock
 crypto/domain layer authenticates them. Verification can transiently decrypt and
 clear buffers without displaying content. See LOCAL_STORAGE.md for two-phase
 preparation/commit; crypto never runs inside database transactions.
+
+## M3 worker execution and creation policy
+
+Browser passphrase KDF execution is isolated in a same-origin module worker.
+Use unchanged libsodium Argon2id/profile, salts, exact UTF-8 and native reference
+vectors. A derived non-extractable KEK may be cloned through a private worker
+message, never persisted; no raw JEK is exported or sent to React. Serialize jobs,
+validate responses and logically revoke/discard aborted jobs; terminate on
+timeout/error. Node-only regression
+tests may execute the same derivation directly; browsers must not silently fall
+back to a blocking/cheaper implementation. Qualify bundling/CSP/offline already-
+loaded operation and responsiveness in real browser engines.
+
+The 15-code-point minimum is a new setup/reset policy in core/journal, not a
+change to wrapping validation or legacy unlock. All cryptographic formats and
+codec vectors stay unchanged. See [M3_EXPERIENCE.md](M3_EXPERIENCE.md).
+
+### Resident worker cancellation and offline retries
+
+An ordinary cancelled KDF job rejects immediately in the main thread, aborts its
+application generation and never adopts its result. The resident worker receives
+a content-free cancellation ID, finishes/clears already executing derivation in
+its finally path, discards the KEK, and becomes idle for a later offline attempt.
+A late cloned key is also discarded by the main receiver. No JEK or journal text
+enters this worker, no credential/key is retained in idle worker state, and no
+wrapping/unwrap/session adoption continues from a rejected job. This preserves
+the same best-effort limitation as already-running Web Crypto: cancellation does
+not guarantee immediate native memory erasure. Startup/job timeout or protocol/
+worker failure still terminates it, with no weaker fallback. Serialize a bounded
+single queued retry while a cancelled job drains. Keeping static code resident
+avoids a network dependency for ordinary offline cancellation/retry; this is not
+persistent application caching or an offline cold-launch guarantee.
