@@ -120,3 +120,15 @@ worker failure still terminates it, with no weaker fallback. Serialize a bounded
 single queued retry while a cancelled job drains. Keeping static code resident
 avoids a network dependency for ordinary offline cancellation/retry; this is not
 persistent application caching or an offline cold-launch guarantee.
+
+## Approved M5 offline and update contract
+
+[M5_OFFLINE.md](M5_OFFLINE.md) defines the approved static-only PWA inventory,
+readiness, installation and conservative close/reopen update protocol. IndexedDB
+remains operational v2 with the existing explicit v1→v2 migration. Storage
+invalidation revokes the affected tab; build/profile/schema incompatibility fails
+closed, while registration/cache verification failure leaves compatible online
+journaling available. All M1–M4 crypto, sessions, authenticated history, tombstone,
+backup and exact reconciliation contracts remain. No cloud/background worker or
+M6 behavior is introduced. Native-device and actual-host qualification must be
+reported separately from local production browser tests.

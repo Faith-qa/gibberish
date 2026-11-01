@@ -8,6 +8,11 @@ import type { Harness } from '../browser/m2'
 const phrase = 'Synthetic M2 browser passphrase'
 const content = { title: 'Synthetic browser private title 🌱', body: 'Synthetic browser private body' }
 
+// This suite injects a test-only domain harness and reloads it. Keep that
+// fixture unregistered: WebKit cannot route the injected module through a
+// controlled page. M5's separate native PWA suite retains all five engines.
+test.use({ serviceWorkers: 'block' })
+
 async function routeHarness(context: BrowserContext) {
   await context.route('**/__m2/**', async (route) => {
     const name = basename(new URL(route.request().url()).pathname)
@@ -156,7 +161,7 @@ test('M2 ciphertext survives a full persistent-browser restart', async ({ browse
   const name = `synthetic-m2-restart-${crypto.randomUUID()}`
   let persistent: BrowserContext | undefined
   try {
-    persistent = await engine.launchPersistentContext(directory)
+    persistent = await engine.launchPersistentContext(directory, { serviceWorkers: 'block' })
     await routeHarness(persistent)
     const page = await persistent.newPage(); await load(page)
     const saved = await page.evaluate(async ({ name, phrase, content }) => {
@@ -166,7 +171,7 @@ test('M2 ciphertext survives a full persistent-browser restart', async ({ browse
     // Closing this persistent context terminates its browser process. Reusing
     // the synthetic profile tests normal restart, not power-loss durability.
     await persistent.close(); persistent = undefined
-    persistent = await engine.launchPersistentContext(directory)
+    persistent = await engine.launchPersistentContext(directory, { serviceWorkers: 'block' })
     await routeHarness(persistent)
     const reopened = await persistent.newPage(); await load(reopened)
     const recovered = await reopened.evaluate(async ({ name, phrase, journalId, entryId }) => {

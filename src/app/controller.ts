@@ -12,7 +12,7 @@ import { browserClock, IdleDeadline } from './idle'
 import type { Clock } from './idle'
 
 type Detail = Awaited<ReturnType<JournalService['readEncryptedEntry']>>
-type SimpleScreen = 'loading' | 'welcome' | 'setup' | 'setup-confirm' | 'locked' | 'concealed' | 'error' | 'tools' | 'export'
+type SimpleScreen = 'loading' | 'welcome' | 'setup' | 'setup-confirm' | 'locked' | 'concealed' | 'error' | 'tools' | 'export' | 'compatibility' | 'prepared-close'
 interface Common { epoch: number; busy: boolean; message: string; notice: string; warning: boolean; pendingDelete: boolean; clockReview: boolean }
 export type AppView = Common & (
   | { screen: SimpleScreen }
@@ -62,6 +62,11 @@ export class AppController {
   readonly #retention: RetentionClock
   readonly #download: typeof handoffDownload
   readonly #warm: () => Promise<void>
+  readonly #close: () => void
+  readonly #compatibility: () => Promise<boolean>
+  #blocked = false
+  #checking = false
+  #resumeRequest = 0
   readonly #listeners = new Set<() => void>()
   #session: JournalSession | undefined
   #setup: SetupHandle | undefined
@@ -83,8 +88,9 @@ export class AppController {
   #abort: AbortController | undefined
   #timer: ReturnType<typeof setInterval> | undefined
   #view: AppView = { screen: 'loading', epoch: 0, busy: false, message: '', notice: '', warning: false, pendingDelete: false, clockReview: false }
-  constructor(service: JournalService, options: { clock?: Clock; warm?: () => Promise<void>; download?: typeof handoffDownload } = {}) {
+  constructor(service: JournalService, options: { clock?: Clock; warm?: () => Promise<void>; download?: typeof handoffDownload; close?: () => void; compatibility?: () => Promise<boolean> } = {}) {
     this.#service = service; this.#clock = options.clock ?? browserClock; this.#retention = new RetentionClock(this.#clock); this.#idle = new IdleDeadline(this.#clock); this.#warm = options.warm ?? warmKdfWorker; this.#download = options.download ?? handoffDownload
+    this.#close = options.close ?? (() => {}); this.#compatibility = options.compatibility ?? (async () => true)
   }
   snapshot = (): AppView => this.#view
   subscribe = (listener: () => void): (() => void) => { this.#listeners.add(listener); return () => { this.#listeners.delete(listener) } }
@@ -94,14 +100,15 @@ export class AppController {
   }
   #disposeExport(): void { this.#artifact?.bytes.fill(0); this.#artifact = undefined; this.#downloadCleanup?.(); this.#downloadCleanup = undefined }
   #invalidate(): void { this.#disposeExport(); this.#generation++; this.#abort?.abort(); this.#abort = undefined }
-  #live(epoch: number): boolean { if (this.#idle.expired()) this.lock('The five-minute inactivity deadline expired.'); return this.#visible && epoch === this.#generation }
+  #live(epoch: number): boolean { if (this.#blocked || this.#checking) return false; if (this.#idle.expired()) this.lock('The five-minute inactivity deadline expired.'); return this.#visible && epoch === this.#generation }
   #guard(epoch: number): void { if (!this.#live(epoch)) throw new DOMException('Operation cancelled.', 'AbortError') }
   #authorized(): JournalSession { if (!this.#session) throw new JournalError('LOCKED'); return this.#session }
-  #activity(): boolean { if (!this.#visible) return false; if (!this.#idle.activity()) { this.lock('The five-minute inactivity deadline expired.'); return false } return true }
+  #activity(): boolean { if (this.#blocked || this.#checking || !this.#visible) return false; if (!this.#idle.activity()) { this.lock('The five-minute inactivity deadline expired.'); return false } return true }
   activity(): void { this.#activity() }
   startTimer(): void { this.#timer ??= setInterval(() => this.checkDeadline(), 1000) }
   stopTimer(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = undefined }
   checkDeadline(): void {
+    if (this.#blocked) return
     this.#retention.sample()
     if (this.#idle.expired()) { this.lock('The five-minute inactivity deadline expired.'); return }
     const clockReview = this.#retention.unsafe
@@ -109,19 +116,35 @@ export class AppController {
     if (warning !== this.#view.warning || clockReview !== this.#view.clockReview) this.#publish({ ...this.#view, warning, clockReview })
   }
   lock(notice = 'This tab is locked. Unsaved writing was cleared.'): void {
+    if (this.#blocked) return
+    this.#resumeRequest++; this.#checking = false
     this.#invalidate(); this.#session?.close(); this.#setup?.close(); this.#recovery?.close()
     this.#restoreFlow?.bytes?.fill(0); this.#restoreFlow?.handle?.close(); this.#restoreFlow = undefined; this.#selectedEntry = undefined; this.#scope = 'active'
     this.#session = undefined; this.#setup = undefined; this.#recovery = undefined; this.#idle.stop()
     this.#show({ screen: this.#journalId ? 'locked' : 'welcome' }, notice)
   }
   conceal(): void {
+    if (this.#blocked) return
+    this.#resumeRequest++; this.#checking = false
     this.#visible = false; this.#invalidate()
     if (this.#idle.expired()) this.lock('The five-minute inactivity deadline expired.')
     else this.#show({ screen: 'concealed' }, 'Content is concealed. Authorization may remain active until the original inactivity deadline.')
   }
   pagehide(): void { this.#visible = false; this.lock('This tab was locked when the page was left.') }
   async resume(): Promise<void> {
+    if (this.#blocked) return
     this.#visible = true
+    if (this.#idle.expired()) { this.lock('The five-minute inactivity deadline expired.'); return }
+    if (this.#checking) return
+    this.#checking = true
+    const request = ++this.#resumeRequest
+    const checkingEpoch = this.#generation
+    let compatible: boolean
+    try { compatible = await this.#compatibility() } catch { compatible = false }
+    if (request !== this.#resumeRequest) return
+    this.#checking = false
+    if (this.#blocked || checkingEpoch !== this.#generation || !this.#visible) return
+    if (!compatible) { this.invalidateCompatibility(); return }
     if (this.#idle.expired()) { this.lock('The five-minute inactivity deadline expired.'); return }
     if (this.#restoreFlow) {
       await this.#run(async (_, epoch) => {
@@ -148,7 +171,7 @@ export class AppController {
     await this.boot()
   }
   async #run(task: (signal: AbortSignal, epoch: number) => Promise<void>): Promise<void> {
-    if (this.#view.busy || !this.#visible) return
+    if (this.#blocked || this.#checking || this.#view.busy || !this.#visible) return
     if (this.#idle.expired()) { this.lock('The five-minute inactivity deadline expired.'); return }
     const epoch = this.#generation; const abort = new AbortController(); this.#abort = abort
     this.#publish({ ...this.#view, busy: true, message: '', notice: '' })
@@ -182,6 +205,7 @@ export class AppController {
     }
   }
   async boot(): Promise<void> {
+    if (this.#blocked || this.#checking) return
     this.lock(''); this.#visible = true; this.#show({ screen: 'loading' })
     await this.#run(async (_, epoch) => {
       const [found] = await Promise.all([this.#service.discoverJournal(), this.#warm()]); this.#guard(epoch)
@@ -324,6 +348,24 @@ export class AppController {
     if (this.#activity() && this.#view.screen === 'editor' && !this.#view.busy && !this.#view.pendingSave) this.#publish({ ...this.#view, draft: { title: value.title, body: value.body }, dirty: true, message: '' })
   }
   isDirty(): boolean { return this.#view.screen === 'editor' && this.#view.dirty }
+
+  invalidateCompatibility(): void {
+    if (this.#blocked) return
+    this.lock(''); this.#blocked = true; this.#close()
+    this.#show({ screen: 'compatibility' }, 'App or storage version changed. This tab was locked. Close this window and reopen with a compatible version. This tab did not reset journal storage.')
+  }
+  prepareToClose(): boolean {
+    if (this.#blocked) return false
+    if (this.#checking || this.#view.busy || this.isDirty() || this.#setup || this.#recovery || this.#restoreFlow
+      || this.#artifact || this.#downloadCleanup || this.#pendingWrite || this.#pendingDelete || this.#pendingReset || this.#pendingRestoration
+      || ['setup', 'setup-key', 'setup-confirm', 'change-phrase', 'export', 'export-ready', 'restore-file', 'restore-credentials', 'restore-summary'].includes(this.#view.screen)) {
+      this.#publish({ ...this.#view, message: 'Finish, cancel or check interrupted operations before preparing this window to close. Save writing or explicitly discard it first.' })
+      return false
+    }
+    this.lock(''); this.#blocked = true; this.#close()
+    this.#show({ screen: 'prepared-close' }, 'This window is locked and ready to close. Close all Gibberish tabs and app windows, then reopen. Other windows have not been locked or saved by this action.')
+    return true
+  }
   async save(): Promise<void> {
     if (!this.#activity() || this.#view.screen !== 'editor' || this.#pendingWrite || this.#pendingDelete || this.#pendingReset) return
     const view = this.#view; const session = this.#authorized()

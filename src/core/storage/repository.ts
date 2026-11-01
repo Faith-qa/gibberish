@@ -10,9 +10,10 @@ export class EncryptedJournalRepository {
   readonly #db: JournalDatabase
   constructor(db: JournalDatabase) { this.#db = db }
   close(): void { this.#db.close() }
+  onInvalidated(listener: () => void): () => void { return this.#db.onInvalidated(listener) }
 
   async #guard<T>(work: () => Promise<T>): Promise<T> {
-    if (!this.#db.isOpen()) throw new JournalError('STORAGE_UNAVAILABLE')
+    if (this.#db.invalidated || !this.#db.isOpen()) throw new JournalError('STORAGE_UNAVAILABLE')
     try { return await work() } catch (error) {
       if (error instanceof JournalError) throw error
       if (error instanceof JournalCryptoError) throw new JournalError('INTEGRITY_ERROR')

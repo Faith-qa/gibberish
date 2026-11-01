@@ -184,3 +184,15 @@ Failed current-phrase authentication conservatively locks this tab; it never
 changes the stored bundle. A fresh unlock is required before another attempt.
 All M3 per-tab conceal/revoke/deadline/dirty-draft rules remain. No Google/sync,
 conflict resolution, bulk deletion, service worker or M5+ work.
+
+## Approved M5 offline and update contract
+
+[M5_OFFLINE.md](M5_OFFLINE.md) defines the approved static-only PWA inventory,
+readiness, installation and conservative close/reopen update protocol. IndexedDB
+remains operational v2 with the existing explicit v1→v2 migration. Storage
+invalidation revokes the affected tab; build/profile/schema incompatibility fails
+closed, while registration/cache verification failure leaves compatible online
+journaling available. All M1–M4 crypto, sessions, authenticated history, tombstone,
+backup and exact reconciliation contracts remain. No cloud/background worker or
+M6 behavior is introduced. Native-device and actual-host qualification must be
+reported separately from local production browser tests.

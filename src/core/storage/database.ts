@@ -19,6 +19,21 @@ export const SCHEMA = Object.freeze({ ...SCHEMA_V1,
 
 /** Internal adapter; normal callers use the encrypted repository, not tables. */
 export class JournalDatabase extends Dexie {
+  #invalidated = false
+  readonly #invalidationListeners = new Set<() => void>()
+  get invalidated(): boolean { return this.#invalidated }
+  onInvalidated(listener: () => void): () => void {
+    if (this.#invalidated) listener()
+    else this.#invalidationListeners.add(listener)
+    return () => { this.#invalidationListeners.delete(listener) }
+  }
+  #invalidate(): void {
+    if (this.#invalidated) return
+    this.#invalidated = true
+    // Synchronous revocation precedes any chance of a later adapter operation.
+    for (const listener of this.#invalidationListeners) listener()
+    this.#invalidationListeners.clear()
+  }
   journal_revisions!: Table<EncryptedJournalRevision, string>
   journal_entries!: Table<EntryProjection, string>
   journal_keys!: Table<JournalKeys, string>
@@ -36,7 +51,8 @@ export class JournalDatabase extends Dexie {
       // M3 never wrote markers. Never bless or discard unknown legacy evidence.
       if (await transaction.table('journal_tombstones').count() !== 0) throw new JournalError('DELETION_REVIEW_REQUIRED')
     })
-    this.on('versionchange', () => this.close())
+    this.on('versionchange', () => { try { this.#invalidate() } finally { this.close() } return false })
+    this.on('close', () => this.#invalidate())
   }
 }
 

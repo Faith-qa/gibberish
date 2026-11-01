@@ -30,3 +30,8 @@ input[type="checkbox"] { flex: none; width: 1.2rem; height: 1.2rem; accent-color
 .notice { border-left: 4px solid #065f46; padding: .9rem 1rem; background: #ecfdf5; color: #064e3b; }
 .gibberish { overflow-wrap: anywhere; line-height: 1.8; }
 dialog::backdrop { background: rgb(28 25 23 / .5); }
+
+/* Standalone safe areas retain native keyboard/zoom and the mobile layout. */
+@media (display-mode: standalone) {
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+}

@@ -5,6 +5,8 @@ import type { AppController } from './controller'
 import { PassphraseForm, RecoveryConfirmation, UnlockForm } from '../features/onboarding/AccessForms'
 import { JournalTools, ExportOptions, ExportReady, ChangePassphrase } from '../features/journal/JournalTools'
 import { RestoreFile, RestoreCredentials, RestoreSummary } from '../features/recovery/BackupRestore'
+import { PwaControls } from '../pwa/PwaControls'
+import type { PwaClient } from '../pwa/client'
 import { EntryDetail, EntryEditor, Timeline } from '../features/journal/JournalViews'
 
 export function AppFrame({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -19,7 +21,7 @@ export function AppFrame({ children, action }: { children: ReactNode; action?: R
   </div>
 }
 
-export function App({ controller }: { controller: AppController }) {
+export function App({ controller, pwa }: { controller: AppController; pwa?: PwaClient }) {
   const view = useSyncExternalStore(controller.subscribe, controller.snapshot)
   const main = useRef<HTMLElement>(null)
   useEffect(() => {
@@ -53,7 +55,7 @@ export function App({ controller }: { controller: AppController }) {
   useEffect(() => { if (!['loading', 'welcome'].includes(view.screen)) main.current?.focus({ preventScroll: true }) }, [view.screen, view.epoch])
 
   const privateScreen = ['timeline', 'detail', 'editor', 'setup', 'setup-key', 'setup-confirm', 'recovery-reset', 'trash', 'tools', 'export', 'export-ready', 'change-phrase', 'restore-file', 'restore-credentials', 'restore-summary'].includes(view.screen)
-  const titles = { loading: 'Opening your local journal', welcome: 'Your thoughts. Your language. Your privacy.', setup: 'Create your journal passphrase', 'setup-key': 'Save your recovery key', 'setup-confirm': 'Confirm your recovery key', locked: 'Unlock your journal', 'recovery-reset': 'Choose a new passphrase', timeline: 'Your journal', detail: 'A private moment', editor: 'Write your thoughts', concealed: 'Your content is concealed', error: 'Local journal unavailable', trash: 'Encrypted Trash', tools: 'Journal tools', export: 'Export your journal', 'export-ready': 'Your file is ready', 'change-phrase': 'Change passphrase', 'restore-file': 'Restore an encrypted backup', 'restore-credentials': 'Verify backup credentials', 'restore-summary': 'Review encrypted restoration' }
+  const titles = { compatibility: 'App compatibility needs attention', 'prepared-close': 'Ready to close this window', loading: 'Opening your local journal', welcome: 'Your thoughts. Your language. Your privacy.', setup: 'Create your journal passphrase', 'setup-key': 'Save your recovery key', 'setup-confirm': 'Confirm your recovery key', locked: 'Unlock your journal', 'recovery-reset': 'Choose a new passphrase', timeline: 'Your journal', detail: 'A private moment', editor: 'Write your thoughts', concealed: 'Your content is concealed', error: 'Local journal unavailable', trash: 'Encrypted Trash', tools: 'Journal tools', export: 'Export your journal', 'export-ready': 'Your file is ready', 'change-phrase': 'Change passphrase', 'restore-file': 'Restore an encrypted backup', 'restore-credentials': 'Verify backup credentials', 'restore-summary': 'Review encrypted restoration' }
   return <AppFrame action={(privateScreen || view.busy) && <button className="button-secondary" onClick={() => flushSync(() => controller.lock())}>{view.screen.startsWith('setup') ? 'Cancel setup' : view.screen.startsWith('restore') ? 'Cancel restoration' : view.screen === 'locked' ? 'Cancel unlocking' : 'Lock this tab'}</button>}>
     <main key={view.epoch} id="main" ref={main} tabIndex={-1} className="mx-auto max-w-4xl space-y-6 px-5 py-8 sm:px-10 sm:py-14">
       <h1 className="max-w-3xl text-3xl font-medium leading-tight tracking-tight sm:text-5xl">{titles[view.screen]}</h1>
@@ -99,5 +101,6 @@ export function App({ controller }: { controller: AppController }) {
       {view.screen === 'detail' && <EntryDetail controller={controller} view={view} />}
       {view.screen === 'editor' && <EntryEditor controller={controller} view={view} />}
     </main>
+    {pwa && <PwaControls pwa={pwa} controller={controller} />}
   </AppFrame>
 }

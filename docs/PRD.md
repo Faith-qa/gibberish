@@ -440,3 +440,15 @@ the precise lifecycle, authenticated marker/backup formats, database v2 migratio
 retention, restoration, download and passphrase-change contracts. These supersede
 older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
 v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.
+
+## Approved M5 offline and update contract
+
+[M5_OFFLINE.md](M5_OFFLINE.md) defines the approved static-only PWA inventory,
+readiness, installation and conservative close/reopen update protocol. IndexedDB
+remains operational v2 with the existing explicit v1→v2 migration. Storage
+invalidation revokes the affected tab; build/profile/schema incompatibility fails
+closed, while registration/cache verification failure leaves compatible online
+journaling available. All M1–M4 crypto, sessions, authenticated history, tombstone,
+backup and exact reconciliation contracts remain. No cloud/background worker or
+M6 behavior is introduced. Native-device and actual-host qualification must be
+reported separately from local production browser tests.

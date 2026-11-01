@@ -232,7 +232,7 @@ Playwright tests the production build; run `pnpm build` first. It starts and sto
 
 ## Environment Configuration
 
-M0 through M4 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
+M0 through M5 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
 
 Optional Google integration will require Google Cloud project configuration and OAuth client settings.
 
@@ -345,11 +345,11 @@ See [the local storage contract](docs/LOCAL_STORAGE.md) for APIs, schema,
 10,000-revision defensive limit and security limitations. Browser harnesses under
 ignored `reports/M2/browser/` cover reloads, independent tabs, offline domain
 operations and normal persistent-browser restarts. These do not prove power-loss
-durability or qualify real mobile devices. No storage harness ships in `dist/`. No service worker or PWA manifest is
-configured yet (M5). The baseline production CSP restricts scripts and connections
+durability or qualify real mobile devices. No storage harness ships in `dist/`. M2 did not configure a service worker; M5 adds the explicitly inventoried static
+PWA shell described below. The baseline production CSP restricts scripts and connections
 to the same origin, adds `wasm-unsafe-eval` for Argon2id's WebAssembly (not general
-JavaScript `unsafe-eval`), and permits inline styles for Tailwind. HTTP security
-headers and further CSP hardening remain release work. Vite development removes
+JavaScript `unsafe-eval`), and permits inline styles for Tailwind. M5 verifies local production MIME/security headers; actual-host qualification and
+further release hardening remain explicit release work. Vite development removes
 the HTML policy to support React Fast Refresh.
 
 M3 adds domain/controller/component tests and real browser journeys for confirmed
@@ -401,8 +401,9 @@ The historical WebKit transport caveat above still applies.
 
 Passphrases are used exactly as entered. A recovery key unlocks existing encrypted
 data; it cannot restore journal data lost from browser storage. There is no email
-reset or cloud backup in this milestone. Offline writing/unlocking
-works in an already loaded application; offline cold launch is not implemented.
+reset or cloud backup in this milestone. Offline writing/unlocking works after application assets are available. M5 adds
+cold launch after complete asset installation and a verified controlling build.
+First use requires an online load; browser storage can still be removed.
 Do not clear browser data as a way to fix an error. See
 [`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) for the approved behavior.
 
@@ -452,6 +453,60 @@ All operations retain the fixed five-minute per-tab session policy. See
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the complete testing strategy.
 
+## Installation, offline files and application updates
+
+Build and test the production application with `pnpm build`, then `pnpm preview`.
+The service worker is intentionally disabled in Vite development. Production uses
+root `/` scope on a stable HTTPS origin; loopback HTTP is the local test exception.
+The build verifies every serialized worker inventory entry against actual files.
+No Google account or environment credential is needed.
+
+Installation and offline readiness are separate. After all assets download, the
+initial uncontrolled page asks you to close and reopen. A controlling matching
+build and complete size/type/SHA-256 cache check produce **Offline files checked
+for this browser**. A timeout, missing asset or cache failure leaves readiness
+unverified while compatible online journaling can continue. Use **Check offline
+files and updates** to retry the exact public assets. Readiness is point-in-time;
+browser eviction or clearing can remove assets and journal data.
+
+Use **Install Gibberish** when the browser offers it, or **Installation help and
+local data safety** for browser-menu instructions. Installation prompts are offered
+only from the locked/welcome screen. Safari Home Screen/Dock apps can use storage
+independent of the original browser. Open the installed app online first. Transfer
+an existing journal with an M4 encrypted backup and empty-target restoration;
+verify the restored journal before deleting any original data. A recovery key and
+an installed icon are not backups.
+
+An update downloads into a separate bounded cache and waits. Finish/cancel/check
+interrupted operations, save or explicitly discard writing, then choose **Prepare
+this window to close**. This locks only this window. Close all Gibberish tabs/app
+windows and reopen for natural activation; the app does not force a reload or
+claim to save other windows. A storage/app incompatibility locks the affected tab
+and requires a compatible reopen, preserving encrypted records. Hidden pages still
+conceal immediately, pagehide/expiry/manual lock revoke, and English never reveals
+automatically after restart or resume.
+
+Only exact public HTML/JS/CSS, KDF worker/sodium dependencies, icons and the manifest
+are cached. No plaintext, credentials, journal DTOs, file imports, Blob downloads,
+backups, arbitrary responses or Google endpoints are cached. Limits are 128 files,
+2 MiB per file, 8 MiB per release and three release caches; essential oversize
+outputs fail without truncation. The static manifest is explicitly project-owned
+so plugin-added entries cannot bypass inventory validation. No background sync,
+retention cleanup, push, account integration or service-worker journal access is
+introduced. IndexedDB stays at v2 with M4's exact v1→v2 migration.
+
+See [M5_OFFLINE](docs/M5_OFFLINE.md) and the [static deployment contract](docs/DEPLOYMENT.md)
+for HTTPS root scope, correct MIME/security headers, atomic publication, old hashed
+asset retention and rollback limits. Local browser tests do not qualify an actual
+host, native OS installation or physical devices. M5 final local verification passed 398 unit/integration/component tests and 230
+browser tests (46 per project, including 15 M5 PWA scenarios). All seven required
+gates passed. The final audit reports two moderate development advisories
+(minimatch and glob) and one low development advisory (deepmerge), with no
+high/critical findings; no finding was suppressed. The prior WebKit worker
+transport caveat remains. Native OS installation, physical devices, actual-host
+HTTPS deployment and hosted CI have not been qualified by these local runs.
+Detailed evidence and earlier failures remain in the ignored local M5 report.
+
 ## Development Roadmap
 
 Development is divided into ten milestones.
@@ -462,8 +517,8 @@ Development is divided into ten milestones.
 | M1 | Cryptography and Gibberish Codec | Complete; verified report kept locally |
 | M2 | Local Storage and Journal Domain | Complete |
 | M3 | Onboarding, Unlocking, and Core UI | Complete |
-| M4 | Trash, Recovery, and Export | Locally verified; awaiting milestone review |
-| M5 | PWA and Offline Hardening | Not started |
+| M4 | Trash, Recovery, and Export | Complete |
+| M5 | PWA and Offline Hardening | Automated acceptance verified; actual-host and physical-device qualification pending |
 | M6 | Google Authentication and Cloud Setup | Not started |
 | M7 | Encrypted Synchronization | Not started |
 | M8 | Cross-Device Restoration and Conflict Resolution | Not started |
@@ -484,6 +539,8 @@ The project maintains specifications for its key architectural and product decis
 | [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) | Exact v2/legacy v1 cryptographic profiles |
 | [`docs/LOCAL_STORAGE.md`](docs/LOCAL_STORAGE.md) | M2 APIs, transactions, schema and failure recovery |
 | [`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) | Approved setup, recovery, session lifecycle and journal UI contracts |
+| [`docs/M5_OFFLINE.md`](docs/M5_OFFLINE.md) | Approved static PWA, readiness, session and update contracts |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | HTTPS root deployment, asset integrity, headers and release qualification |
 | [`docs/M4_LIFECYCLE.md`](docs/M4_LIFECYCLE.md) | Approved Trash, tombstone, backup/restoration, export and passphrase-change contracts |
 | [`docs/SYNC_STRATEGY.md`](docs/SYNC_STRATEGY.md) | Offline synchronization, conflicts, and deletion propagation |
 | [`docs/TESTING.md`](docs/TESTING.md) | Testing strategy and quality gates |
