@@ -10,7 +10,7 @@ When you want to revisit your original thoughts, unlock your journal and explici
 
 Your journal belongs to you.
 
-> **Project status:** M0–M3 are implemented and locally verified. M3 adds confirmed local onboarding, passphrase/recovery access, encrypted journaling, explicit Reveal/Hide and per-tab locking; it awaits milestone review. Reports remain local. Trash, backup/export, Google integration, synchronization and PWA cold launch remain later milestones.
+> **Project status:** M0–M3 are complete. M4 is implemented and locally verified, awaiting review. It adds encrypted Trash/restore, authenticated permanent-deletion markers, encrypted backup export/restoration, explicit readable export and current-passphrase change. Reports remain local. Google integration, synchronization and PWA cold launch remain later milestones.
 
 ---
 
@@ -232,7 +232,7 @@ Playwright tests the production build; run `pnpm build` first. It starts and sto
 
 ## Environment Configuration
 
-M0 through M3 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
+M0 through M4 require no environment variables or credentials. `.env.example` documents this; copying it is optional. Vite loads `.env` and `.env.local` if present; only `VITE_*` values are exposed to browser code. Environment files are ignored by Git except `.env.example`. Do not add unused Google configuration before M6.
 
 Optional Google integration will require Google Cloud project configuration and OAuth client settings.
 
@@ -369,7 +369,18 @@ qualification and full-suite runs passed. Transport errors still fail closed;
 these host results do not establish universal WebKit or real-device reliability.
 Details and earlier verification failures remain in the local report.
 
-## Using the M3 Local Journal
+M4 verification passed 336 unit/integration/component tests and 155 browser tests
+(31 per project) with no final failures, skips or retries. Native downloads,
+cross-engine restoration, M3 database migration, transaction failures and already
+loaded offline flows were exercised. Every configured project prepared, restored
+and downloaded a 33,524,361-byte encrypted file and downloaded 16,761,251-byte
+readable output; larger outputs failed without truncation. These measurements
+qualify the automated host, including emulation, rather than physical low-memory
+phones or OS download managers. All seven required gates passed; the same moderate
+development-dependency advisory remains. No dependency/lockfile changes were made.
+The historical WebKit transport caveat above still applies.
+
+## Using the Local Journal
 
 1. Choose **Get started**, enter a new passphrase (at least 15 Unicode code points,
    at most 1,024 UTF-8 bytes), and save the independent recovery key separately.
@@ -390,10 +401,54 @@ Details and earlier verification failures remain in the local report.
 
 Passphrases are used exactly as entered. A recovery key unlocks existing encrypted
 data; it cannot restore journal data lost from browser storage. There is no email
-reset, backup export or cloud backup in this milestone. Offline writing/unlocking
+reset or cloud backup in this milestone. Offline writing/unlocking
 works in an already loaded application; offline cold launch is not implemented.
 Do not clear browser data as a way to fix an error. See
 [`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) for the approved behavior.
+
+Open an encrypted entry and choose **Move to Trash**, then confirm. Trash and
+restoration create fresh authenticated encrypted revisions and preserve history.
+**Open Trash** provides the same default Gibberish and explicit Reveal controls.
+**Restore entry** works while ciphertext remains; **Permanently delete locally**
+requires a separate confirmation and removes all encrypted versions of that entry.
+A content-free authenticated marker remains. Conflicted branches are preserved
+for review and cannot be purged or resolved here.
+
+Trash becomes eligible for cleanup after 30 elapsed days on the device clock.
+Small batches run during visible, authorized use away from drafts and uncertain
+operations. Cleanup is not an exact-time background service; clock anomalies pause
+it for date review. A closed browser cannot independently establish trusted elapsed
+time. Deletion cannot erase old exports, browser snapshots or replicas elsewhere.
+
+**Journal tools → Export journal** offers an encrypted JSON backup or readable
+Markdown. The encrypted backup includes complete retained history, all branches,
+retained Trash and deletion markers. It protects content while exposing identifiers,
+dates, statuses and some configuration. A 32-MiB file/10,000-revision/10,000-marker
+bound fails explicitly without truncation. Export is a read-only snapshot, separate
+from future Google synchronization. Keep backups in a private location.
+
+On an empty welcome screen, **Restore encrypted backup** validates a file using
+its passphrase or independent recovery key, then requires confirmation. Recovery
+restoration prepares a new passphrase. Restoration commits atomically into an
+entirely empty database with original journal/revision IDs and a new local device;
+it never merges or replaces another journal. Trash keeps its original retention
+dates. Older offline backups cannot know about later deletions elsewhere. A newer
+passphrase does not unlock an older file unless it was exported with that phrase.
+
+Readable Markdown requires acknowledgment before generation and a separate
+**Download readable Markdown** action. It includes active current heads only,
+labels active conflicting versions, and excludes Trash/history. The final UTF-8
+limit is 16 MiB. Prepared files remain private in memory and are discarded on
+navigation, hiding, locking or expiry. Native downloads may outlive the tab and
+may be spooled by the browser/OS; “Download requested” is not a durable backup
+receipt. No app-managed persistent plaintext staging is used.
+
+**Journal tools → Change passphrase** reauthenticates the current passphrase and
+commits a new wrapper using exact snapshot checks. It preserves the journal key,
+independent recovery wrapper and encrypted history. A failed current-passphrase
+check locks the tab. Neither a change nor recovery reset revokes old backup files.
+All operations retain the fixed five-minute per-tab session policy. See
+[`docs/M4_LIFECYCLE.md`](docs/M4_LIFECYCLE.md) for formats, boundaries and limitations.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the complete testing strategy.
 
@@ -406,8 +461,8 @@ Development is divided into ten milestones.
 | M0 | Project Foundation | Complete |
 | M1 | Cryptography and Gibberish Codec | Complete; verified report kept locally |
 | M2 | Local Storage and Journal Domain | Complete |
-| M3 | Onboarding, Unlocking, and Core UI | Locally verified; awaiting milestone review |
-| M4 | Trash, Recovery, and Export | Not started |
+| M3 | Onboarding, Unlocking, and Core UI | Complete |
+| M4 | Trash, Recovery, and Export | Locally verified; awaiting milestone review |
 | M5 | PWA and Offline Hardening | Not started |
 | M6 | Google Authentication and Cloud Setup | Not started |
 | M7 | Encrypted Synchronization | Not started |
@@ -429,6 +484,7 @@ The project maintains specifications for its key architectural and product decis
 | [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) | Exact v2/legacy v1 cryptographic profiles |
 | [`docs/LOCAL_STORAGE.md`](docs/LOCAL_STORAGE.md) | M2 APIs, transactions, schema and failure recovery |
 | [`docs/M3_EXPERIENCE.md`](docs/M3_EXPERIENCE.md) | Approved setup, recovery, session lifecycle and journal UI contracts |
+| [`docs/M4_LIFECYCLE.md`](docs/M4_LIFECYCLE.md) | Approved Trash, tombstone, backup/restoration, export and passphrase-change contracts |
 | [`docs/SYNC_STRATEGY.md`](docs/SYNC_STRATEGY.md) | Offline synchronization, conflicts, and deletion propagation |
 | [`docs/TESTING.md`](docs/TESTING.md) | Testing strategy and quality gates |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Step-by-step implementation milestones |

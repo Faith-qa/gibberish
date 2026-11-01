@@ -176,7 +176,9 @@ Journal plaintext must not be persisted unencrypted.
 - Gibberish titles must be derived from encrypted data using the reversible codec.
 - Users must be able to open entries from the timeline.
 - Entries must be displayed in reverse chronological order, newest first.
-- Trashed entries must not appear in the main timeline.
+- Sole-head trashed entries must not appear in the main timeline. A conflicting
+  entry with active and trashed heads remains visible with all branches; M4
+  does not select a winning branch or resolve conflicts.
 - Each entry must communicate its synchronization status without exposing plaintext.
 
 ### FR-08: Edit Journal Entry
@@ -194,8 +196,12 @@ Journal plaintext must not be persisted unencrypted.
 - Trashed entries must remain encrypted locally and, when connected, in cloud storage.
 - Users must be able to view and restore entries from Trash while unlocked.
 - Each trashed entry must have a deletion timestamp.
-- Entries must remain recoverable for 30 days after deletion.
-- After 30 days, the application must initiate permanent deletion during its next applicable cleanup or synchronization operation.
+- Unless explicitly permanently deleted, entries are retained for 30 elapsed
+  days from the current authenticated Trash revision. After that they become
+  eligible for bounded cleanup during subsequent visible, authorized use.
+- Restoration may succeed after expiry while ciphertext remains and no permanent
+  deletion has committed. It is not a guaranteed grace period. Device-clock
+  anomalies defer automatic deletion; closed-app elapsed time cannot be proven.
 - Users must be able to permanently delete an entry from Trash before the retention period expires.
 - Deletion and restoration must synchronize across connected devices.
 - Failed deletion operations must be retried without silently restoring deleted entries.
@@ -425,3 +431,12 @@ incomplete. Reveal is required before reading/editing stored English; new-entry
 authoring remains English. Conflicts are preserved with readonly branch access,
 not resolved. Local save confirmation requires verified committed persistence.
 See [M3_EXPERIENCE.md](M3_EXPERIENCE.md) for exact boundary/lifecycle contracts.
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

@@ -917,3 +917,11 @@ This document defines the implementation sequence for Gibberish MVP v1.
 `TESTING.md` defines verification requirements.
 
 Changes to implementation sequencing must preserve security and data-integrity dependencies.
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

@@ -1,0 +1,120 @@
+{
+  "syntheticOnly": true,
+  "sourceCommit": "ccac07dbde38f9fec1f230e9382e1aa0ad8ada09",
+  "passphrase": "Synthetic M3 migration passphrase",
+  "recoveryKey": "gbr1.5KYahj3f06g8EgsED7gaHrg3VLOWY0Hy5tTf-krQWJE",
+  "stores": {
+    "device_config": [
+      {
+        "deviceId": "e53feae7-a8da-470a-9f09-d6580c9fd806",
+        "cloudEnabled": false,
+        "googleSpreadsheetId": null,
+        "googleDriveFolderId": null,
+        "lastSuccessfulSyncAt": null
+      }
+    ],
+    "journal_config": [
+      {
+        "journalId": "1ce9b322-5f35-4375-a281-fae130341c79",
+        "schemaVersion": 1,
+        "createdAt": "2026-10-31T14:57:44.197Z",
+        "autoLockMinutes": 5,
+        "codecVersion": 1,
+        "encryptionVersion": 2
+      }
+    ],
+    "journal_entries": [
+      {
+        "journalId": "1ce9b322-5f35-4375-a281-fae130341c79",
+        "entryId": "37d114ab-9a9d-438d-ace5-579e30c54e62",
+        "headRevisionIds": [
+          "a407cef9-eebf-41b0-868f-6dc0542778e3"
+        ],
+        "status": "active",
+        "createdAt": "2026-10-31T14:57:44.308Z",
+        "updatedAt": "2026-10-31T14:57:44.313Z",
+        "deletedAt": null
+      }
+    ],
+    "journal_keys": [
+      {
+        "journalId": "1ce9b322-5f35-4375-a281-fae130341c79",
+        "version": 1,
+        "passphraseWrappedKey": {
+          "version": 1,
+          "purpose": "passphrase",
+          "algorithm": "AES-256-GCM",
+          "kdf": {
+            "name": "argon2id",
+            "salt": "twSrzxixCLhSNlESjUTrzQ",
+            "parameters": {
+              "version": 19,
+              "memoryKiB": 65536,
+              "iterations": 3,
+              "parallelism": 1,
+              "hashLength": 32
+            }
+          },
+          "nonce": "Vg_z775p1B_Y7ksN",
+          "wrappedKey": "P2VPttiO6IASgmmmHSctxwdYaCutpBNgM3igv_F-ZqM90PoZ1s4IoBIHthnWfd3G"
+        },
+        "recoveryWrappedKey": {
+          "version": 1,
+          "purpose": "recovery",
+          "algorithm": "AES-256-GCM",
+          "kdf": {
+            "name": "hkdf-sha256",
+            "salt": "1-Hisfjzxm6Cs8Ir-K9InQ",
+            "parameters": {
+              "hashLength": 32
+            }
+          },
+          "nonce": "LW5JV9djYjE6hZ4R",
+          "wrappedKey": "Ic1HWlkF9klH4uCWDb-2jVVUvEPFaWEuIX-3zsuwHdjc2DlvV7R9zITK6NwvB-BB"
+        }
+      }
+    ],
+    "journal_revisions": [
+      {
+        "journalId": "1ce9b322-5f35-4375-a281-fae130341c79",
+        "entryId": "37d114ab-9a9d-438d-ace5-579e30c54e62",
+        "revisionId": "8ba895a1-21e8-4646-b5bb-6cffe66bd2a4",
+        "parentRevisionIds": [],
+        "status": "active",
+        "createdAt": "2026-10-31T14:57:44.308Z",
+        "updatedAt": "2026-10-31T14:57:44.308Z",
+        "deletedAt": null,
+        "schemaVersion": 1,
+        "encryptedPayload": {
+          "version": 2,
+          "algorithm": "AES-256-GCM",
+          "nonce": "c1FZnsfcj6QSGVgU",
+          "ciphertext": "F-CliHRx14X-CyCLNmedWZuFlJi6Iwg5ySElF25HZHH8CsxR2UtSDmDeUN8uOgA4ksx4WzjRyFsTNJ89T0i_WrouB3YBMfHl1V6pakW0mt5a8kU6SqyDdscPfYEBUCDa_nNhYEas"
+        }
+      },
+      {
+        "journalId": "1ce9b322-5f35-4375-a281-fae130341c79",
+        "entryId": "37d114ab-9a9d-438d-ace5-579e30c54e62",
+        "revisionId": "a407cef9-eebf-41b0-868f-6dc0542778e3",
+        "parentRevisionIds": [
+          "8ba895a1-21e8-4646-b5bb-6cffe66bd2a4"
+        ],
+        "status": "active",
+        "createdAt": "2026-10-31T14:57:44.308Z",
+        "updatedAt": "2026-10-31T14:57:44.313Z",
+        "deletedAt": null,
+        "schemaVersion": 1,
+        "encryptedPayload": {
+          "version": 2,
+          "algorithm": "AES-256-GCM",
+          "nonce": "-ci0Izd422rPF_EZ",
+          "ciphertext": "eAx7PkS0hXmOBB4pqLJaeY6XYTIu1wqY-xcLz3FsRI4lFthDwWqDb_EwVKvz7wtU3-xBsaWyfd2JZXEzYVjBRiEOEhOjqZmf7rwWWPD2rVyePXfh5pfdfUQOP_ur-vp1ZO-V5Q"
+        }
+      }
+    ],
+    "journal_tombstones": [],
+    "sync_conflicts": [],
+    "sync_metadata": [],
+    "sync_queue": []
+  }
+}

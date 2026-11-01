@@ -11,7 +11,7 @@ describe('M2 atomic transactions and failure recovery', () => {
   it('fails at the documented history limit before writing and never silently truncates a snapshot', async () => {
     const f = await fixture()
     const plan = await f.service.prepareCreate(f.session, content)
-    expect(() => validateJournalSnapshot({ journal: plan.expected.journal,
+    expect(() => validateJournalSnapshot({ journal: plan.expected.journal, tombstones: [],
       revisions: Array.from({ length: MAX_HISTORY_REVISIONS + 1 }, () => plan.revision) })).toThrowError(expect.objectContaining({ code: 'LIMIT_EXCEEDED' }))
     vi.spyOn(f.db.journal_revisions, 'count').mockResolvedValueOnce(MAX_HISTORY_REVISIONS)
     await expect(f.service.commitWrite(f.session, plan)).rejects.toMatchObject({ code: 'LIMIT_EXCEEDED' })

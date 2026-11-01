@@ -2,20 +2,20 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { AppController } from '../../app/controller'
 
-export function PassphraseForm({ controller, reset, busy }: { controller: AppController; reset?: boolean; busy: boolean }) {
+export function PassphraseForm({ controller, reset, restore, busy }: { controller: AppController; reset?: boolean; restore?: boolean; busy: boolean }) {
   const [phrase, setPhrase] = useState(''); const [confirmation, setConfirmation] = useState('')
   function submit(event: FormEvent) {
     event.preventDefault(); const value = phrase; const repeated = confirmation
     setPhrase(''); setConfirmation('')
-    void (reset ? controller.resetPassphrase(value, repeated) : controller.prepareSetup(value, repeated))
+    void (restore ? controller.restorePassphrase(value, repeated) : reset ? controller.resetPassphrase(value, repeated) : controller.prepareSetup(value, repeated))
   }
   return <form onSubmit={submit} aria-busy={busy}>
     <fieldset disabled={busy} className="space-y-5">
       <legend className="sr-only">{reset ? 'Choose a replacement passphrase' : 'Create a journal passphrase'}</legend>
       <p id="phrase-help">Use at least 15 characters. Spaces and password managers are welcome. Your passphrase is used exactly as entered, up to 1,024 UTF-8 bytes.</p>
-      <label className="field-label">{reset ? 'New passphrase' : 'Passphrase'}<input type="password" autoComplete="new-password" spellCheck={false} value={phrase} onChange={(event) => setPhrase(event.target.value)} aria-describedby="phrase-help" required /></label>
+      <label className="field-label">{reset || restore ? 'New passphrase' : 'Passphrase'}<input type="password" autoComplete="new-password" spellCheck={false} value={phrase} onChange={(event) => setPhrase(event.target.value)} aria-describedby="phrase-help" required /></label>
       <label className="field-label">Confirm passphrase<input type="password" autoComplete="new-password" spellCheck={false} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></label>
-      <button className="button" type="submit">{reset ? 'Reset passphrase locally' : 'Prepare recovery key'}</button>
+      <button className="button" type="submit">{restore ? 'Prepare restoration passphrase' : reset ? 'Reset passphrase locally' : 'Prepare recovery key'}</button>
     </fieldset>
   </form>
 }

@@ -179,7 +179,7 @@ describe('M2 encrypted journal domain', () => {
   it('never uses an untrusted tombstone to erase a revision', async () => {
     const f = await fixture()
     const root = await f.service.createEntry(f.session, content)
-    await f.db.journal_tombstones.add({ journalId: f.journalId, entryId: root.entryId, deletionRevisionId: crypto.randomUUID(),
+    await f.db.table<unknown>('journal_tombstones').add({ journalId: f.journalId, entryId: root.entryId, deletionRevisionId: crypto.randomUUID(),
       deletedAt: '2026-01-01T00:00:00.000Z', permanentlyDeletedAt: '2026-01-01T00:00:00.000Z' })
     await expect(f.service.listEntries(f.session)).rejects.toMatchObject({ code: 'DELETION_REVIEW_REQUIRED' })
     expect(await f.db.journal_revisions.count()).toBe(1)

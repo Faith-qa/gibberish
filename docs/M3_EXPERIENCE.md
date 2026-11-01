@@ -2,6 +2,8 @@
 
 Approved 2026-10-31, Decisions A–E with user clarifications. This contract refines
 the PRD/security specifications; no persisted schema or crypto version changes.
+M4 extends this baseline through [M4_LIFECYCLE.md](M4_LIFECYCLE.md); its explicit
+database migration and lifecycle/portability APIs preserve these session rules.
 
 ## Setup and recovery
 
@@ -21,8 +23,9 @@ Recovery is domain-owned: unwrap the recovery wrapper, authenticate full history
 prepare a fresh passphrase wrapper outside IDB, and CAS against the exact old
 bundle/config/device/revision snapshot. Preserve JEK, journal identity, recovery
 wrapper and immutable revisions. Retries retain the same prepared replacement;
-reconcile exact outcomes before claiming reset success. No general settings,
-backup/export, key rotation, cloud reset or other M4+ workflow is included.
+reconcile exact outcomes before claiming reset success. The original M3 scope
+excluded general settings and export; M4 adds only approved passphrase change and
+portable backup/readable export. Key rotation and cloud reset remain excluded.
 
 ## Session state and races
 
@@ -73,7 +76,9 @@ unsaved plans; inspect committed history and never automatically resubmit.
 
 Explain separately: a recovery key unlocks existing encrypted data, but cannot
 restore data lost from browser storage. No email/Google credential bypass. This
-version is local-only and has no backup export or offline cold-launch guarantee.
+application remains local-only. M4 adds explicit encrypted backup export and
+empty-target restoration, with readable export only on acknowledgment. Offline
+cold launch remains unimplemented.
 
 ## Accessibility and verification
 

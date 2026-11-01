@@ -20,16 +20,21 @@ describe('M2 database schema and migration boundary', () => {
     expect(await rawStores(f.db)).toEqual(before)
   })
 
-  it('fails a blocked open promptly without a destructive reset', async () => {
+  it('allows a blocked notification to drain but enforces the open deadline without a destructive reset', async () => {
     const f = await fixture()
     const before = await rawStores(f.db)
+    vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(Dexie.prototype, 'open').mockImplementation(function (this: Dexie) {
       queueMicrotask(() => this.on('blocked').fire({} as IDBVersionChangeEvent))
       return new Dexie.Promise(() => {})
     })
-    await expect(openDatabase(f.db.name)).rejects.toMatchObject({ code: 'STORAGE_UNAVAILABLE' })
-    vi.restoreAllMocks()
+    const opening = openDatabase(f.db.name); let settled = false
+    void opening.then(() => { settled = true }, () => { settled = true })
+    const rejected = expect(opening).rejects.toMatchObject({ code: 'STORAGE_UNAVAILABLE' })
+    await vi.advanceTimersByTimeAsync(4999); expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(2); await rejected
+    vi.useRealTimers(); vi.restoreAllMocks()
     expect(await rawStores(f.db)).toEqual(before)
   })
   it('rejects an unknown existing schema and preserves its records', async () => {
@@ -49,8 +54,8 @@ describe('M2 database schema and migration boundary', () => {
     await f.service.createEntry(f.session, content)
     const before = await rawStores(f.db)
     const future = new Dexie(f.db.name)
-    future.version(1).stores(SCHEMA)
-    future.version(2).stores({ future_store: 'id' })
+    future.version(2).stores(SCHEMA)
+    future.version(3).stores({ future_store: 'id' })
     try {
       await future.open()
       expect(f.db.isOpen()).toBe(false)
@@ -66,11 +71,11 @@ describe('M2 database schema and migration boundary', () => {
     const before = await rawStores(f.db)
     f.repository.close()
     const upgrade = new Dexie(f.db.name)
-    upgrade.version(1).stores(SCHEMA)
-    upgrade.version(2).stores({ future_store: 'id' }).upgrade(() => { throw new Error('Synthetic upgrade abort') })
+    upgrade.version(2).stores(SCHEMA)
+    upgrade.version(3).stores({ future_store: 'id' }).upgrade(() => { throw new Error('Synthetic upgrade abort') })
     try { await expect(upgrade.open()).rejects.toThrow() } finally { upgrade.close() }
     const recovered = await connect(f.db.name)
-    expect(recovered.db.verno).toBe(1)
+    expect(recovered.db.verno).toBe(2)
     expect(await rawStores(recovered.db)).toEqual(before)
   })
 

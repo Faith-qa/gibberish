@@ -640,3 +640,12 @@ The browser Argon2id computation runs in a same-origin dedicated worker with
 unchanged profile/vectors, bounded jobs, cancellation and typed private messages.
 There is no weaker/main-thread browser fallback. Owned buffers are cleared and
 late keys discarded; browser/GC/engine memory erasure cannot be guaranteed.
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

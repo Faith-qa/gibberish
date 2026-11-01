@@ -946,3 +946,12 @@ This document defines the synchronization protocol for Gibberish MVP v1.
 `ARCHITECTURE.md` remains authoritative for module boundaries.
 
 Any change to the synchronization protocol must be documented and tested before dependent implementation begins.
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

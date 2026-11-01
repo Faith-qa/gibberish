@@ -3,7 +3,7 @@
 Status: operational envelope/AAD v2, legacy envelope/AAD v1, wrapping v1 and
 codec integration. This document defines crypto contracts required by
 `SECURITY.md` and `DATA_MODEL.md`. M2 storage/domain integration is documented
-in `LOCAL_STORAGE.md`; no journal UI is implemented.
+in `LOCAL_STORAGE.md`; M3 provides the journal UI and isolated KDF worker.
 
 ## Modules and trust boundary
 
@@ -122,7 +122,7 @@ cost for slow clients. Browser tests measure it on the development host; this is
 initial local calibration, not real-device qualification. Allocation/derivation
 failure returns a safe error; no weaker fallback is attempted. KDF execution is
 synchronous inside libsodium after its async loader is ready and may briefly
-block its caller; a UI worker strategy can be added during UI work if needed.
+block its caller; browser callers execute it in the M3 same-origin worker.
 
 ### Recovery profile
 
@@ -274,3 +274,12 @@ worker failure still terminates it, with no weaker fallback. Serialize a bounded
 single queued retry while a cancelled job drains. Keeping static code resident
 avoids a network dependency for ordinary offline cancellation/retry; this is not
 persistent application caching or an offline cold-launch guarantee.
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

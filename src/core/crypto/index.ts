@@ -9,3 +9,5 @@ export type { EncryptedEnvelope, RevisionIdentity, WrappedKeyRecord } from './ty
 export { decrypt as decryptLegacyEnvelope } from './aes'
 export { encryptRevision, decryptRevision, revisionAadV2, revisionMetadata, validateRevision, validateRevisionMetadata, MAX_REVISION_PARENTS } from './revision'
 export type { RevisionMetadata, EncryptedJournalRevision, RevisionEnvelope, SupportedEnvelope } from './types'
+export { sealTombstone, verifyTombstone, validateTombstone, validateProof, sealBackupManifest, verifyBackupManifest } from './authentication'
+export type { AuthenticationProof, AuthenticatedTombstone, TombstoneMetadata, BackupManifest } from './types'

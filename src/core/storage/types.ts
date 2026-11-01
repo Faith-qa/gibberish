@@ -1,4 +1,4 @@
-import type { EncryptedJournalRevision, WrappedKeyRecord } from '../crypto'
+import type { AuthenticatedTombstone, EncryptedJournalRevision, WrappedKeyRecord } from '../crypto'
 
 export interface JournalConfig {
   journalId: string; schemaVersion: 1; createdAt: string; autoLockMinutes: 5; codecVersion: 1; encryptionVersion: 2
@@ -11,8 +11,8 @@ export interface DeviceConfig {
   googleDriveFolderId: string | null; lastSuccessfulSyncAt: string | null
 }
 export interface JournalState { config: JournalConfig; keys: JournalKeys; device: DeviceConfig }
-export interface EntrySnapshot { journal: JournalState; entryId: string; revisions: readonly EncryptedJournalRevision[] }
-export interface JournalSnapshot { journal: JournalState; revisions: readonly EncryptedJournalRevision[] }
+export interface EntrySnapshot { journal: JournalState; entryId: string; revisions: readonly EncryptedJournalRevision[]; tombstones: readonly Tombstone[] }
+export interface JournalSnapshot { journal: JournalState; revisions: readonly EncryptedJournalRevision[]; tombstones: readonly Tombstone[] }
 export type JournalDiscovery = { kind: 'empty' } | { kind: 'existing'; journalId: string }
 export interface PassphraseResetPlan { expected: JournalSnapshot; nextKeys: JournalKeys }
 export interface EntryView { projection: EntryProjection; heads: readonly EncryptedJournalRevision[] }
@@ -32,9 +32,11 @@ export interface SyncOperation {
 export interface SyncMetadata {
   entryId: string; journalId: string; acknowledgedRevisionIds: string[]; lastSyncedAt: string | null; remoteHeadRevisionIds: string[]
 }
-export interface Tombstone {
-  journalId: string; entryId: string; deletionRevisionId: string; deletedAt: string; permanentlyDeletedAt: string
-}
+export type Tombstone = AuthenticatedTombstone
+export interface DeletionSnapshot { entry: EntrySnapshot; operations: readonly SyncOperation[]; metadata: SyncMetadata | null }
+export interface PreparedDelete { expected: DeletionSnapshot; tombstone: Tombstone; operationId: string }
+export interface DeleteReceipt { journalId: string; entryId: string; outcome: 'committed' | 'already-committed'; syncStatus: 'local-only' | 'pending' }
+export interface RestorePlan { snapshot: JournalSnapshot; conflictIds: readonly { entryId: string; conflictId: string }[]; restoredAt: string }
 export interface PreparedWrite {
   expected: EntrySnapshot; revision: EncryptedJournalRevision; operationId: string; conflictId: string; detectedAt: string
 }

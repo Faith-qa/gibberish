@@ -75,6 +75,13 @@ requires a new codec version with explicit compatibility tests.
 
 ## M3 presentation contract
 
+M4 Trash and restore views use the same authenticated v2 encrypted-envelope
+bytes, preview and paging contract below. Lifecycle revisions use fresh nonces;
+the codec mapping/version is unchanged. Tombstones carry no journal content and
+are not presented as entries. Backup JSON and readable Markdown use their own
+explicit export formats; neither generates Gibberish from plaintext. See
+[M4_LIFECYCLE.md](M4_LIFECYCLE.md).
+
 Use only authenticated operational encrypted-envelope bytes. Eight-word title
 previews are explicitly incomplete prefixes; they cannot recover the full entry.
 Detail paging assembles exactly one canonical gib1 prefix and the same ordered

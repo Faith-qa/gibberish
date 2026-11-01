@@ -1,9 +1,9 @@
-import { generateJournalKey, generateRecoveryKey, unwrapWithRecoveryKey, wrapWithPassphrase, wrapWithRecoveryKey } from '../crypto'
+import { generateJournalKey, generateRecoveryKey, unwrapWithRecoveryKey, unwrapWithPassphrase, wrapWithPassphrase, wrapWithRecoveryKey } from '../crypto'
 import { browserCrypto } from '../crypto/random'
 import type { EncryptedJournalRepository, JournalKeys, JournalSnapshot, JournalState, PassphraseResetPlan } from '../storage'
 import { check, same, validateKeys, validateResetPlan, validateState } from '../storage/validation'
-import type { JournalSession } from './service'
-import { authenticateRows, notAborted } from './content'
+import type { JournalSession } from './session'
+import { authenticateHistory, preserveHistory, notAborted } from './content'
 import { projectJournal } from './graph'
 import { JournalError } from './errors'
 
@@ -74,12 +74,23 @@ export class JournalAccess {
     return { journalId: state.journal.config.journalId, session }
   }
 
+  async authenticatePassphraseChange(journalId: string, expectedKeys: JournalKeys, currentPhrase: string, signal?: AbortSignal): Promise<RecoveryHandle> {
+    notAborted(signal)
+    const snapshot = await this.#repository.readJournalSnapshot(journalId)
+    check(!snapshot.journal.device.cloudEnabled); check(same(snapshot.journal.keys, expectedKeys), 'AUTHORIZATION_CHANGED')
+    const key = await unwrapWithPassphrase(snapshot.journal.keys.passphraseWrappedKey, currentPhrase, journalId, signal)
+    await authenticateHistory(key, journalId, snapshot.revisions, snapshot.tombstones, () => notAborted(signal))
+    projectJournal(snapshot.revisions); notAborted(signal)
+    const handle = Object.freeze({ close: () => { this.#recoveries.delete(handle) } })
+    this.#recoveries.set(handle, { key, snapshot }); return handle
+  }
+
   async authenticateRecovery(journalId: string, credential: string, signal?: AbortSignal): Promise<RecoveryHandle> {
     notAborted(signal)
     const snapshot = await this.#repository.readJournalSnapshot(journalId)
     check(!snapshot.journal.device.cloudEnabled)
     const key = await unwrapWithRecoveryKey(snapshot.journal.keys.recoveryWrappedKey, credential, journalId)
-    await authenticateRows(key, journalId, snapshot.revisions, () => notAborted(signal))
+    await authenticateHistory(key, journalId, snapshot.revisions, snapshot.tombstones, () => notAborted(signal))
     projectJournal(snapshot.revisions)
     const handle = Object.freeze({ close: () => { this.#recoveries.delete(handle) } })
     this.#recoveries.set(handle, { key, snapshot })
@@ -104,12 +115,9 @@ export class JournalAccess {
     const committed = same(current.journal.keys, plan.nextKeys)
     check(committed || same(current.journal.keys, plan.expected.journal.keys), 'AUTHORIZATION_CHANGED')
     check(!current.journal.device.cloudEnabled)
-    await authenticateRows(state.key, plan.nextKeys.journalId, current.revisions, live)
+    await authenticateHistory(state.key, plan.nextKeys.journalId, current.revisions, current.tombstones, live)
     projectJournal(current.revisions)
-    for (const previous of plan.expected.revisions) {
-      const row = current.revisions.find((r) => r.revisionId === previous.revisionId)
-      check(row, 'INCOMPLETE_HISTORY'); check(same(row, previous), 'ID_COLLISION')
-    }
+    preserveHistory(plan.expected.revisions, current.revisions, current.tombstones)
     live()
     return { snapshot: current, committed }
   }

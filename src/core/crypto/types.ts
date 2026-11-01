@@ -51,3 +51,20 @@ export const RECOVERY_PARAMETERS = Object.freeze({ hashLength: 32 })
 
 // Bound untrusted envelopes before base64 decoding; this is a crypto-helper limit.
 export const MAX_PLAINTEXT_BYTES = 16 * 1024 * 1024
+
+export interface AuthenticationProof {
+  readonly version: 1
+  readonly algorithm: 'AES-256-GCM'
+  readonly nonce: string
+  readonly tag: string
+}
+export interface TombstoneMetadata {
+  readonly version: 1
+  readonly journalId: string
+  readonly entryId: string
+  readonly deletionRevisionId: string
+  readonly deletedAt: string
+  readonly permanentlyDeletedAt: string
+}
+export interface AuthenticatedTombstone extends TombstoneMetadata { readonly authentication: AuthenticationProof }
+export type BackupManifest = readonly [string, string, readonly unknown[], readonly unknown[], readonly unknown[], readonly unknown[]]

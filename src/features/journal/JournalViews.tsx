@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppController, AppView } from '../../app/controller'
+import { LifecycleDialog } from './LifecycleDialog'
 import { encryptedPresentation, encryptedPreview } from './presentation'
 
-export function Timeline({ controller, view }: { controller: AppController; view: Extract<AppView, { screen: 'timeline' }> }) {
+export function Timeline({ controller, view }: { controller: AppController; view: Extract<AppView, { screen: 'timeline' | 'trash' }> }) {
   return <>
     <div className="flex flex-wrap gap-3">
-      <button className="button" disabled={view.busy || view.pendingSave} onClick={() => controller.newEntry()}>New entry</button>
+      <button className="button" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={() => controller.newEntry()}>New entry</button>
+      {view.pendingDelete && <button className="button-secondary" disabled={view.busy} onClick={()=>{void controller.checkDeletion()}}>Check and retry deletion</button>}
       {view.pendingSave && <><button className="button-secondary" disabled={view.busy} onClick={() => { void controller.checkSave() }}>Check interrupted save</button><button className="button-secondary" disabled={view.busy} onClick={() => { void controller.checkSave(true) }}>Retry prepared save</button></>}
-      <button className="button-secondary" disabled={view.busy} onClick={() => { void controller.timeline() }}>Refresh entries</button>
+      <button className="button-secondary" disabled={view.busy} onClick={() => { void controller.backToList() }}>Refresh entries</button>
+      <button className="button-secondary" disabled={view.busy} onClick={() => { void (view.screen === 'trash' ? controller.timeline() : controller.trash()) }}>{view.screen === 'trash' ? 'Back to journal' : 'Open Trash'}</button>
+      <button className="button-secondary" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={() => controller.tools()}>Journal tools</button>
     </div>
     <p className="muted">Entries are shown newest first. Preview words come from the encrypted envelope, not your English title.</p>
-    {view.entries.length === 0 && <div className="card"><h2 className="text-xl font-medium">A little space to begin</h2><p>Your journal has no active entries. Choose New entry when you are ready.</p></div>}
+    {view.entries.length === 0 && <div className="card"><h2 className="text-xl font-medium">A little space to begin</h2><p>{view.screen === 'trash' ? 'No retained Trash entries are available.' : 'Your journal has no active entries.'} Choose New entry when you are ready.</p></div>}
     <ul className="space-y-4" aria-label="Encrypted entries">
       {view.entries.map(({ projection, heads }, index) => <li className="card space-y-3" key={projection.entryId}>
         {projection.status === 'conflicted' && <p className="font-semibold text-amber-900">Multiple versions need review. Every branch is preserved; resolution is unavailable here.</p>}
@@ -26,15 +30,24 @@ export function Timeline({ controller, view }: { controller: AppController; view
 }
 
 export function EntryDetail({ controller, view }: { controller: AppController; view: Extract<AppView, { screen: 'detail' }> }) {
+  const [action, setAction] = useState<'trash' | 'restore' | 'delete' | null>(null)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  const cancel = () => { setAction(null); trigger.current?.focus() }
   const presentation = useMemo(() => encryptedPresentation(view.detail.revision.encryptedPayload), [view.detail.revision])
   const page = Math.min(view.page, presentation.pages - 1)
   return <>
     <div className="flex flex-wrap gap-3">
-      <button className="button-secondary" onClick={() => { void controller.timeline() }}>Back to journal</button>
+      <button className="button-secondary" onClick={() => { void controller.backToList() }}>Back to journal</button>
       {view.revealed ? <button className="button" onClick={() => controller.hide()}>Hide My Thoughts</button>
         : <button className="button" disabled={view.busy} onClick={() => { void controller.reveal() }}>Reveal My Thoughts</button>}
-      {view.revealed && view.detail.projection.status !== 'conflicted' && <button className="button-secondary" disabled={view.busy || view.pendingSave} onClick={() => controller.edit()}>Edit entry</button>}
+      {view.revealed && view.detail.projection.status !== 'conflicted' && view.detail.revision.status === 'active' && <button className="button-secondary" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={() => controller.edit()}>Edit entry</button>}
     </div>
+    {view.detail.projection.status !== 'conflicted' && <div className="flex flex-wrap gap-3">
+      {view.detail.revision.status === 'active' ? <button className="button-secondary" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={(event)=>{trigger.current=event.currentTarget;setAction('trash')}}>Move to Trash</button>
+        : <><button className="button-secondary" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={(event)=>{trigger.current=event.currentTarget;setAction('restore')}}>Restore entry</button><button className="button-secondary" disabled={view.busy || view.pendingSave || view.pendingDelete} onClick={(event)=>{trigger.current=event.currentTarget;setAction('delete')}}>Permanently delete locally</button></>}
+    </div>}
+    {view.pendingDelete && <button className="button-secondary" disabled={view.busy} onClick={()=>{void controller.checkDeletion()}}>Check and retry deletion</button>}
+    {action && <LifecycleDialog kind={action} cancel={cancel} confirm={()=>{const selected=action;setAction(null);void (selected==='delete'?controller.deleteEntry(true):controller.transitionEntry(selected,true))}} />}
     {view.detail.projection.status === 'conflicted' && <p className="warning">This is a preserved branch. Editing and conflict resolution are unavailable for a known-conflicted entry.</p>}
     {view.pendingSave && <p className="warning">An interrupted save needs its outcome checked. Return to the journal to check or retry it before editing another entry.</p>}
     {view.revealed ? <section className="card space-y-5" aria-label="Revealed entry">
@@ -71,7 +84,7 @@ export function EntryEditor({ controller, view }: { controller: AppController; v
   return <>
     <p className="warning">Unsaved writing stays only in memory. Switching apps or tabs, locking, closing, or refreshing may discard it. Save before leaving.</p>
     <form onSubmit={(event) => { event.preventDefault(); void (view.pendingSave ? controller.checkSave(true) : controller.save()) }} aria-busy={view.busy}>
-      <fieldset className="space-y-5" disabled={view.busy || view.pendingSave}>
+      <fieldset className="space-y-5" disabled={view.busy || view.pendingSave || view.pendingDelete}>
         <legend className="sr-only">Write your entry</legend>
         <label className="field-label">Title<input autoComplete="off" spellCheck={false} autoCorrect="off" value={view.draft.title} onChange={(event) => controller.updateDraft({ ...view.draft, title: event.target.value })} required /></label>
         <label className="field-label">Body<textarea rows={12} autoComplete="off" spellCheck={false} autoCorrect="off" value={view.draft.body} onChange={(event) => controller.updateDraft({ ...view.draft, body: event.target.value })} required /></label>

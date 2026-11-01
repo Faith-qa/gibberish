@@ -1,0 +1,111 @@
+// @vitest-environment node
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, content, fixture, rawStores, phrase } from '../storage/fixture'
+import { TRASH_RETENTION_MS, trashExpired } from '../../../src/core/journal/lifecycle'
+
+afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await cleanup() })
+async function trashed() {
+  const f = await fixture(); const created = await f.service.createEntry(f.session, content)
+  const plan = await f.service.prepareTrash(f.session, created.entryId, created.revisionId)
+  await f.service.commitWrite(f.session, plan)
+  return { ...f, created, trash: plan }
+}
+describe('M4 authenticated Trash and whole-entry deletion', () => {
+  it('preserves content and ancestry with fresh v2 encryption on Trash and restore', async () => {
+    const f = await trashed()
+    expect(await f.service.listEntryViews(f.session)).toEqual([])
+    expect(await f.service.listTrashViews(f.session)).toHaveLength(1)
+    expect(f.trash.revision.parentRevisionIds).toEqual([f.created.revisionId])
+    expect((await f.service.readEntry(f.session, f.created.entryId)).payload).toEqual(content)
+    const restore = await f.service.prepareRestore(f.session, f.created.entryId, f.trash.revision.revisionId)
+    await f.service.commitWrite(f.session, restore)
+    expect(restore.revision.deletedAt).toBeNull()
+    expect(restore.revision.parentRevisionIds).toEqual([f.trash.revision.revisionId])
+    expect(restore.revision.encryptedPayload.nonce).not.toBe(f.trash.revision.encryptedPayload.nonce)
+    expect(await f.service.listTrashViews(f.session)).toEqual([])
+    expect((await f.service.readEntry(f.session, f.created.entryId)).payload).toEqual(content)
+    expect(await f.db.journal_revisions.count()).toBe(3)
+    expect(JSON.stringify(await rawStores(f.db))).not.toContain(content.body)
+  })
+  it('purges all content atomically, retains proof, retries idempotently and fences stale writes', async () => {
+    const f = await fixture(); const root = await f.service.createEntry(f.session, content)
+    const stale = await f.service.prepareEdit(f.session, root.entryId, root.revisionId, content)
+    const trash = await f.service.prepareTrash(f.session, root.entryId, root.revisionId); await f.service.commitWrite(f.session, trash)
+    const plan = await f.service.preparePermanentDelete(f.session, root.entryId, trash.revision.revisionId, 'manual', true)
+    expect(await f.service.commitPermanentDelete(f.session, plan)).toMatchObject({ outcome: 'committed', syncStatus: 'local-only' })
+    expect(await f.service.commitPermanentDelete(f.session, plan)).toMatchObject({ outcome: 'already-committed' })
+    expect(await f.db.journal_revisions.count()).toBe(0); expect(await f.db.journal_entries.count()).toBe(0)
+    expect(await f.db.journal_tombstones.toArray()).toEqual([plan.tombstone]); expect(await f.db.sync_queue.count()).toBe(0)
+    await expect(f.service.commitWrite(f.session, stale)).rejects.toMatchObject({ code: 'ENTRY_DELETED' })
+    await expect(f.service.readEntry(f.session, root.entryId)).rejects.toMatchObject({ code: 'ENTRY_DELETED' })
+    await f.service.rebuildProjections(f.session); expect(await f.service.listEntries(f.session)).toEqual([])
+    const recovery = await f.service.authenticateRecovery(f.journalId, f.recoveryKey)
+    const reset = await f.service.preparePassphraseReset(recovery, phrase, phrase)
+    expect(await f.service.commitPassphraseReset(recovery, reset)).toHaveProperty('session')
+  })
+  it('retains racing branches and refuses destruction of conflicts', async () => {
+    const f = await fixture(); const root = await f.service.createEntry(f.session, content)
+    const edit = await f.service.prepareEdit(f.session, root.entryId, root.revisionId, content)
+    const trash = await f.service.prepareTrash(f.session, root.entryId, root.revisionId)
+    await f.service.commitWrite(f.session, edit); await f.service.commitWrite(f.session, trash)
+    expect((await f.service.listEntries(f.session))[0]?.status).toBe('conflicted')
+    await expect(f.service.preparePermanentDelete(f.session, root.entryId, trash.revision.revisionId, 'manual', true)).rejects.toMatchObject({ code: 'CONFLICT' })
+    await expect(f.service.prepareRestore(f.session, root.entryId, trash.revision.revisionId)).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(await f.db.journal_revisions.count()).toBe(3)
+  })
+  it('never rebases a stale destructive plan over a successful restoration', async () => {
+    const f = await trashed(); const id = f.created.entryId
+    const plan = await f.service.preparePermanentDelete(f.session, id, f.trash.revision.revisionId, 'manual', true)
+    const restore = await f.service.prepareRestore(f.session, id, f.trash.revision.revisionId); await f.service.commitWrite(f.session, restore)
+    await expect(f.service.commitPermanentDelete(f.session, plan)).rejects.toMatchObject({ code: 'STALE_SNAPSHOT' })
+    expect(await f.db.journal_tombstones.count()).toBe(0); expect(await f.db.journal_revisions.count()).toBe(3)
+  })
+  it('checks exact retention boundary and allows restore while expired content remains', async () => {
+    const f = await trashed(); const id = f.created.entryId; const head = f.trash.revision.revisionId
+    const date = Date.parse(f.trash.revision.deletedAt!)
+    expect(trashExpired(f.trash.revision.deletedAt!, date + TRASH_RETENTION_MS - 1)).toBe(false)
+    expect(trashExpired(f.trash.revision.deletedAt!, date + TRASH_RETENTION_MS)).toBe(true)
+    expect(trashExpired(f.trash.revision.deletedAt!, date + TRASH_RETENTION_MS + 1)).toBe(true)
+    expect(trashExpired(f.trash.revision.deletedAt!, Number.NaN)).toBe(false)
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(date + TRASH_RETENTION_MS - 1)
+    await expect(f.service.preparePermanentDelete(f.session, id, head, 'expiry', false)).rejects.toThrow()
+    vi.setSystemTime(date + TRASH_RETENTION_MS)
+    const plan = await f.service.preparePermanentDelete(f.session, id, head, 'expiry', false)
+    expect(plan.tombstone.deletedAt).toBe(f.trash.revision.deletedAt)
+    const restore = await f.service.prepareRestore(f.session, id, head)
+    expect(restore.revision.status).toBe('active')
+    vi.useRealTimers()
+  })
+  it('reconciles a lost purge receipt and rejects a forged/tampered marker without deleting', async () => {
+    const f = await trashed(); const plan = await f.service.preparePermanentDelete(f.session, f.created.entryId, f.trash.revision.revisionId, 'manual', true)
+    const changed = { ...plan, tombstone: { ...plan.tombstone, permanentlyDeletedAt: '2099-01-01T00:00:00.000Z' } }
+    await expect(f.service.commitPermanentDelete(f.session, changed)).rejects.toThrow()
+    expect(await f.db.journal_revisions.count()).toBe(2)
+    const commit = f.repository.commitPermanentDelete.bind(f.repository)
+    vi.spyOn(f.repository, 'commitPermanentDelete').mockImplementationOnce(async (...args) => { await commit(...args); throw new Error('Synthetic lost receipt') })
+    await expect(f.service.commitPermanentDelete(f.session, plan)).rejects.toThrow()
+    expect(await f.service.inspectPermanentDelete(f.session, plan)).toHaveProperty('outcome', 'already-committed')
+  })
+  it('authenticates marker-covered removal during a concurrently prepared recovery reset', async () => {
+    const f = await trashed(); const recovery = await f.service.authenticateRecovery(f.journalId, f.recoveryKey)
+    const reset = await f.service.preparePassphraseReset(recovery, phrase, phrase)
+    const plan = await f.service.preparePermanentDelete(f.session, f.created.entryId, f.trash.revision.revisionId, 'manual', true)
+    await f.service.commitPermanentDelete(f.session, plan)
+    const result = await f.service.commitPassphraseReset(recovery, reset)
+    expect(await f.service.listEntries(result.session)).toEqual([])
+  })
+  it.each(['journal_tombstones', 'journal_revisions', 'journal_entries', 'sync_conflicts', 'sync_metadata', 'sync_queue'] as const)('rolls back purge failure at %s and preserves unrelated data', async (store) => {
+    const f = await trashed(); const other = await f.service.createEntry(f.session, { title: 'Synthetic unrelated', body: 'Synthetic unrelated body' })
+    await f.db.sync_conflicts.add({ conflictId: crypto.randomUUID(), journalId: f.journalId, entryId: f.created.entryId, conflictingRevisionIds: [f.trash.revision.revisionId], detectedAt: new Date().toISOString(), resolved: false, resolutionRevisionId: null })
+    await f.db.sync_metadata.add({ entryId: f.created.entryId, journalId: f.journalId, acknowledgedRevisionIds: [], lastSyncedAt: null, remoteHeadRevisionIds: [] })
+    await f.db.sync_queue.add({ operationId: crypto.randomUUID(), journalId: f.journalId, entryId: f.created.entryId, revisionId: f.created.revisionId, type: 'publish-revision', state: 'pending', createdAt: new Date().toISOString(), attempts: 0, lastAttemptAt: null })
+    const plan = await f.service.preparePermanentDelete(f.session, f.created.entryId, f.trash.revision.revisionId, 'manual', true)
+    const before = await rawStores(f.db)
+    const fail = () => { throw new DOMException('Synthetic purge quota', 'QuotaExceededError') }
+    if (store === 'journal_tombstones') f.db.table(store).hook('creating', fail)
+    else f.db.table(store).hook('deleting', fail)
+    await expect(f.service.commitPermanentDelete(f.session, plan)).rejects.toThrow()
+    expect(await rawStores(f.db)).toEqual(before)
+    expect((await f.service.readEntry(f.session, other.entryId)).payload.body).toBe('Synthetic unrelated body')
+  })
+})

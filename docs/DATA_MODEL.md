@@ -663,6 +663,8 @@ The revision must:
 
 ```typescript
 export interface JournalTombstone {
+  version: 1;
+  authentication: { version: 1; algorithm: "AES-256-GCM"; nonce: string; tag: string };
   journalId: string;
   entryId: string;
 
@@ -884,7 +886,9 @@ Encrypted backups must contain a portable representation of the journal.
 ```typescript
 export interface EncryptedJournalBackup {
   format: "gibberish-backup";
-  version: 1;
+  version: 2;
+  exportId: string;
+  authentication: { version: 1; algorithm: "AES-256-GCM"; nonce: string; tag: string };
 
   exportedAt: string;
 
@@ -1039,3 +1043,12 @@ compares config/device/bundle/revisions atomically. Unsupported cloud-enabled
 replacement fails closed; M3 adds no cloud publication worker or pending-key flow.
 Gibberish is derived on demand from authenticated envelope bytes, never persisted
 as redundant title/body fields. See [M3_EXPERIENCE.md](M3_EXPERIENCE.md).
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.

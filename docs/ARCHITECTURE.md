@@ -278,11 +278,13 @@ records and non-secret metadata only. The service receives transient English
 but the storage adapter does not. Domain reads never return a keyless
 authoritative timeline or select a conflicted branch by timestamp. Readable
 payloads returned by `readEntry` belong only in transient caller memory and must
-be cleared by future UI reveal/lock handling.
+be cleared by the application controller's reveal/lock handling.
 
 See [LOCAL_STORAGE.md](LOCAL_STORAGE.md) for signatures, transactions and error
-semantics. Delete/restore, conflict resolution, UI session management and Google
-APIs are later milestones and are not part of the M2 service.
+semantics. M3 adds private session management; M4 adds authenticated Trash,
+restore, whole-entry purge, backup restoration/export and passphrase change as
+specified in [M4_LIFECYCLE.md](M4_LIFECYCLE.md). Conflict resolution and Google
+APIs remain later milestones.
 
 ### 6.4 `core/storage`
 
@@ -301,8 +303,9 @@ transactions and exact snapshot checks are the multi-tab correctness mechanism;
 Web Locks are not required. Persisted projections/verification flags are hints,
 not authenticated history. Domain listings require a usable key/capability and
 verify metadata before returning any timeline information. The M3 application
-controller owns session lifecycle and calls these domain contracts; later cloud/
-deletion workflows remain unimplemented.
+controller owns session lifecycle and calls these domain contracts. M4 adds
+exact destructive and empty-target restoration transactions with authenticated
+markers; cloud workflows remain unimplemented.
 
 ### 6.5 `core/google`
 
@@ -889,3 +892,12 @@ remains in core/journal, encryption in core/crypto and transactions in core/stor
 The native KDF worker changes execution location, not any cryptographic format.
 The view-state union must not carry journal metadata while locked/concealed.
 [M3_EXPERIENCE.md](M3_EXPERIENCE.md) defines lifecycle, UI and failure contracts.
+
+
+## M4 approved implementation contract
+
+Decisions A–G Option 1 are approved. [M4_LIFECYCLE.md](M4_LIFECYCLE.md) defines
+the precise lifecycle, authenticated marker/backup formats, database v2 migration,
+retention, restoration, download and passphrase-change contracts. These supersede
+older draft tombstone/backup shapes and M2-only lifecycle exclusions. Revision/AAD
+v2, wrapping v1, codec v1 and the five-minute M3 privacy policy remain unchanged.
